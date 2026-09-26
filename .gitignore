@@ -1,0 +1,66 @@
+# =====================================================================
+# .gitignore — Proyecto NIDS (UNSW-NB15) · Inteligencia Artificial 2026
+# Regla de la consigna: /data se excluye del control de versiones.
+# Los datos se re-descargan de la fuente oficial (ver data/README.md).
+# =====================================================================
+
+# --- Datos (NUNCA al repo: ~700 MB, se re-descargan de UNSW) ---------
+# Se ignora todo lo que hay dentro de data/ salvo la documentación de
+# procedencia (URL oficial, fecha de descarga y MD5 de los CSV).
+data/*
+!data/README.md
+!data/.gitkeep
+
+# Por seguridad: ningún CSV ni ZIP fuera de data/ tampoco
+# (predicciones de la CLI, copias sueltas del dataset, descargas).
+*.csv
+*.zip
+*.parquet
+# Excepción: CSV chicos de ejemplo para demostrar la CLI / tests.
+!examples/**/*.csv
+!tests/**/*.csv
+
+# --- Artefactos generados (se regeneran con python -m src.train) ------
+models/*
+!models/.gitkeep
+# reports/metrics/*.json y reports/figures/*.png SÍ se versionan
+# (trazabilidad de experimentos); solo se ignoran temporales.
+reports/**/tmp/
+
+# --- Documentos de oficina y material de la cátedra -------------------
+# El Charter vive como PROJECT_CHARTER_CORREGIDO.md (versionado);
+# los .docx son copias para entregar por mail.
+*.docx
+~$*
+# Consigna del docente: no redistribuir en un repo público.
+[Cc]onsigna/
+
+# --- Entorno virtual y Python -----------------------------------------
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Jupyter ----------------------------------------------------------
+.ipynb_checkpoints/
+
+# --- Secretos / configuración local -----------------------------------
+.env
+.env.*
+
+# --- Logs -------------------------------------------------------------
+*.log
+logs/
+
+# --- IDE y sistema operativo ------------------------------------------
+.vscode/
+.idea/
+.claude/
+Thumbs.db
+desktop.ini
+.DS_Store
