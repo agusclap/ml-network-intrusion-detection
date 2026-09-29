@@ -1,139 +1,133 @@
-# Propuesta de Proyecto Final (Project Charter) — versión corregida
+# Project Charter: Detección de intrusiones en redes con Machine Learning
 
-**Universidad de la Defensa Nacional – CRUC IUA · Facultad de Ingeniería · Ingeniería en Informática · Inteligencia Artificial**
+Inteligencia Artificial - Ingeniería en Informática - UNDEF CRUC IUA
 
-| | |
-|---|---|
-| **Título** | Sistema de Detección de Intrusiones en Redes (NIDS) mediante Machine Learning sobre UNSW-NB15 |
-| **Docente** | Ing. Hernando Alexis González |
-| **Modalidad** | Grupal |
-| **Integrantes** | [Nombre completo alumno 1] – [Nombre completo alumno 2] |
-| **Categorías tecnológicas** | Machine Learning Predictivo + Data Engineering & IA |
-| **Fecha** | [Completar] |
-| **Repositorio / Issue #1** | [Completar al crear el repo] |
-
----
+- **Docente:** Ing. Hernando Alexis González
+- **Modalidad:** Grupal
+- **Integrantes:** Maximo Agustin Rodeyro y Lautaro Niccolini
+- **Categorías:** Machine Learning Predictivo y Data Engineering & IA
+- **Fecha:** 29/9/2026
 
 ## 1. Resumen
 
-Proponemos construir un clasificador de tráfico de red que, a partir de las características de un flujo (duración, protocolo, servicio, estado de la conexión, bytes y paquetes por sentido, TTL, tiempos de establecimiento TCP y contadores de conexiones recientes), determine si el flujo es **normal o un ataque** (tarea principal) y, como segunda tarea, a qué **categoría de ataque** pertenece (Analysis, Backdoor, DoS, Exploits, Fuzzers, Generic, Reconnaissance, Shellcode, Worms, además de Normal). Usamos la partición oficial del dataset UNSW-NB15, comparamos un baseline sin IA y una regresión logística contra un modelo de gradient boosting (XGBoost) con parámetros fijados de antemano, validamos con cross-validation sobre el conjunto de entrenamiento y evaluamos una única vez sobre el test oficial. El entregable es un pipeline reproducible con una herramienta de línea de comandos que recibe un CSV de flujos y devuelve la predicción.
+La idea del proyecto es armar un sistema de detección de intrusiones (NIDS) basado en Machine Learning. El sistema recibe los datos de un flujo de red (protocolo, servicio, duración, bytes y paquetes enviados en cada sentido, TTL, etc.) y decide si ese flujo es tráfico normal o un ataque. Como segunda tarea, también intentamos predecir de qué tipo de ataque se trata.
+
+Para esto usamos el dataset UNSW-NB15 con la división en train y test que publicaron sus autores. Vamos a comparar una regla simple sin IA y una regresión logística contra XGBoost, validar con cross-validation sobre el train y evaluar el modelo final una sola vez sobre el test. Al final queremos tener un pipeline reproducible y un script de consola que reciba un CSV con flujos y devuelva las predicciones.
 
 ## 2. Definición del problema
 
-### 2.1 Descripción funcional
+Los IDS tradicionales funcionan con firmas, es decir, reglas escritas a mano para ataques ya conocidos, y les cuesta detectar variantes nuevas. Nuestra propuesta es entrenar un modelo que aprenda cómo se comporta el tráfico malicioso a partir de ejemplos etiquetados, para que funcione como una capa más de detección.
 
-Los sistemas de detección de intrusiones basados en firmas dependen de reglas escritas a mano y no detectan variantes no catalogadas. Queremos entrenar un modelo que aprenda el comportamiento de los flujos etiquetados como ataque y funcione como capa complementaria de detección basada en comportamiento. El sistema recibe un registro de flujo con 42 variables y devuelve una etiqueta (normal/ataque o categoría) con su probabilidad.
+Planteamos dos tareas sobre los mismos datos:
 
-### 2.2 Modelado del entorno (PEAS)
+- **Binaria (tarea principal):** normal o ataque.
+- **Multiclase (tarea secundaria):** Normal o una de las 9 categorías de ataque del dataset (Analysis, Backdoor, DoS, Exploits, Fuzzers, Generic, Reconnaissance, Shellcode y Worms).
 
-| Componente | Descripción |
+### PEAS
+
+| | |
 |---|---|
-| **Performance** | Binario: recall de ataque y tasa de falsos positivos en el punto de operación elegido, F1, PR-AUC. Multiclase: Macro-F1 y F1 por clase. |
-| **Environment** | Registros de flujo de red de la partición oficial UNSW-NB15; parcialmente observable (solo metadatos del flujo, sin contenido); estático (archivos CSV); las clases de ataque presentan solapamiento real entre sí. |
-| **Actuators** | Emisión de una etiqueta (binaria o de categoría) y su probabilidad por cada flujo de entrada. |
-| **Sensors** | Las 42 variables del flujo provistas por el dataset: `proto`, `service`, `state`, duración, bytes/paquetes por sentido, tasas, TTL (`sttl`, `dttl`), pérdidas, jitter, ventanas y números de secuencia TCP, tiempos de handshake (`synack`, `ackdat`, `tcprtt`), tamaños medios, profundidad HTTP y contadores de conexiones recientes (`ct_*`). |
+| Performance | Tarea binaria: recall de ataques y tasa de falsos positivos, además de F1 y PR-AUC. Tarea multiclase: Macro-F1 y F1 por clase. |
+| Environment | Registros de flujos de red del dataset UNSW-NB15. Es un entorno parcialmente observable porque solo tenemos los metadatos del flujo y no el contenido de los paquetes. Es estático, ya que trabajamos sobre archivos CSV. |
+| Actuators | Para cada flujo, el sistema devuelve una etiqueta (normal/ataque o categoría de ataque) junto con su probabilidad. |
+| Sensors | Las 42 variables que trae cada registro: protocolo, servicio, estado de la conexión, duración, bytes y paquetes por sentido, TTL, pérdidas, jitter, tiempos del handshake TCP, tamaño medio de los paquetes y contadores de conexiones recientes. |
 
-## 3. Origen y naturaleza de los datos
+## 3. Datos
 
-- **Fuente oficial:** UNSW-NB15, Australian Centre for Cyber Security, UNSW Canberra (Moustafa & Slay, 2015). Descargado desde el enlace oficial de research.unsw.edu.au/projects/unsw-nb15-dataset (SharePoint de UNSW). Usamos exclusivamente la partición provista por los autores en `Training and Testing Sets/`:
-  - `UNSW_NB15_training-set.csv`: **175.341 registros** (MD5 `e55caabaa6cd4a8f1c06a227bcfababc`).
-  - `UNSW_NB15_testing-set.csv`: **82.332 registros** (MD5 `e0beea40262e46168cdb81476dbc27b4`).
-  - Verificamos la integridad por MD5 en el código antes de cada entrenamiento. La copia disponible en Kaggle contiene los mismos datos con los nombres de ambos archivos intercambiados; por eso no la usamos y cargamos cada archivo por su hash y no por su nombre.
-- **Estructura:** 45 columnas por registro = **42 variables predictoras** (39 numéricas y 3 categóricas: `proto`, `service`, `state`) + `id` (índice de fila, se descarta) + dos etiquetas: `label` (0 = normal, 1 = ataque) y `attack_cat` (10 valores: 9 categorías de ataque + `Normal`; `label = 0` si y solo si `attack_cat = Normal`, verificado sin excepciones). El dataset crudo original tiene 49 variables (incluye IPs, puertos y timestamps) que los autores excluyeron de la partición; no las usamos.
-- **Calidad:** sin valores nulos ni infinitos; sin errores de formato. Existen categorías de `state` que solo aparecen en el test (`ACC`, `CLO`), por lo que la codificación one-hot debe tolerar categorías desconocidas.
-- **Desbalance:** en entrenamiento 68 % de los registros son ataques (55 % en test). Entre categorías el desbalance es fuerte: `Generic` 40.000 y `Exploits` 33.393 frente a `Worms` 130 y `Shellcode` 1.133. Lo tratamos con ponderación de clases (`class_weight` / `sample_weight`) y métricas robustas (F1 por clase, Macro-F1, PR-AUC); no usamos sobremuestreo sintético.
-- **Particularidades detectadas en el análisis previo de los datos, que condicionan la metodología:**
-  1. **Solapamiento de etiquetas:** un 17,4 % de las filas de entrenamiento comparten exactamente las 42 variables con filas de otra categoría (sobre todo entre Analysis, Backdoor, DoS, Exploits, Fuzzers y Reconnaissance). Para un único clasificador determinista esto impone un techo estructural de Macro-F1 de ≈ 0,81 sobre el conjunto de entrenamiento; por eso no fijamos una meta absoluta de Macro-F1 y usamos un criterio relativo a los baselines.
-  2. **Cambio de distribución entre entrenamiento y test:** la proporción de ataques pasa de 68 % a 55 % y un 5 % de las filas del test son copias exactas de filas de entrenamiento. El test se evalúa íntegro (benchmark oficial) y estas características se discuten como limitación.
-  3. **Variables de TTL (`sttl`, `dttl`, `ct_state_ttl`):** separan casi por sí solas ataque de normal por cómo se generó el tráfico sintético del testbed (una regla sobre `sttl` alcanza F1 ≈ 0,88 en entrenamiento). No es fuga de información —el TTL se observa en producción— sino un sesgo del dataset. Las mantenemos en el modelo principal y lo documentamos como limitación.
-  4. **Redundancias menores:** `ct_ftp_cmd` es idéntica a `is_ftp_login`; `tcprtt = synack + ackdat`. No afectan a los modelos de árboles.
+Usamos UNSW-NB15, un dataset armado por el Australian Centre for Cyber Security de UNSW Canberra (Moustafa y Slay, 2015). Lo descargamos desde la página oficial (research.unsw.edu.au/projects/unsw-nb15-dataset). Trabajamos solamente con la partición en train y test que publicaron los autores:
 
-## 4. Métricas de éxito y baselines
+- `UNSW_NB15_training-set.csv`: 175.341 registros.
+- `UNSW_NB15_testing-set.csv`: 82.332 registros.
 
-### 4.1 Baselines
+Cada registro tiene 45 columnas. De esas, 42 son las variables que usamos como entrada (39 numéricas y 3 categóricas: `proto`, `service` y `state`). Las otras tres son `id`, que es un índice de fila y se descarta, y las dos etiquetas: `label` (0 = normal, 1 = ataque) y `attack_cat` (la categoría del ataque, o "Normal").
 
-- **Sin IA (binario):** regla `dpkts == 0` (el destino no responde: comportamiento típico de escaneos y sondas de DoS). Definida y medida únicamente sobre entrenamiento: recall 0,65, precisión 0,92, tasa de falsos positivos 0,12, F1 0,76.
-- **Sin IA (multiclase):** predecir siempre la clase mayoritaria.
-- **ML sencillo (ambas tareas):** regresión logística con ponderación de clases sobre las mismas variables.
+También existe una copia del dataset en Kaggle, pero ahí los archivos de train y test tienen los nombres cambiados. Por eso usamos la versión oficial y verificamos los archivos con su hash MD5 antes de entrenar. Los hashes y los pasos para descargar los datos están en `data/README.md`.
 
-### 4.2 Criterio de éxito — tarea binaria (principal)
+Cuando revisamos los datos encontramos varias cosas a tener en cuenta:
 
-El modelo principal debe alcanzar sobre el test oficial, en una única evaluación, **recall de ataque ≥ 0,90 manteniendo una tasa de falsos positivos igual o inferior a la del baseline heurístico**, y superar en F1 de ataque tanto a la heurística como a la regresión logística. El umbral de decisión se elige **solo con las predicciones out-of-fold de la validación cruzada sobre entrenamiento** (regla fijada de antemano: el umbral que maximiza F1 sujeto a recall ≥ 0,90 en OOF).
+- **No hay valores faltantes.** Algunos valores de `state` aparecen solo en el test, así que el encoding de las variables categóricas tiene que soportar categorías que no vio en el entrenamiento.
+- **Desbalance.** En el train el 68 % de los registros son ataques, y en el test el 55 %. Entre las categorías de ataque la diferencia es mucho más grande: Generic tiene 40.000 registros y Worms solo 130. Para manejarlo usamos pesos por clase en los modelos y métricas que no se engañan con el desbalance (F1 por clase, Macro-F1, PR-AUC). No vamos a generar datos sintéticos.
+- **Registros iguales con distinta etiqueta.** Cerca del 17 % de las filas del train tiene exactamente los mismos valores en las 42 variables que otra fila con otra categoría de ataque. Pasa sobre todo entre Analysis, Backdoor, DoS y Exploits. Esto hace que ningún modelo pueda separar perfectamente esas clases: calculamos que el Macro-F1 máximo posible en el train ronda 0,81. Por eso no ponemos un valor fijo de Macro-F1 como objetivo.
+- **Variables de TTL.** `sttl`, `dttl` y `ct_state_ttl` separan casi solas el tráfico normal de los ataques, por cómo se generó el tráfico en el laboratorio. No se trata de data leakage porque el TTL es un dato que también está disponible en una red real, pero sí es un sesgo del dataset. Las dejamos en el modelo y lo mencionamos como limitación.
+- **Duplicados entre train y test.** Alrededor del 5 % de las filas del test también aparecen en el train. Evaluamos sobre el test completo porque es el benchmark oficial, y lo mencionamos como limitación.
 
-Métricas reportadas (no son criterios de aprobación): precisión, F1, tasa de falsos positivos, PR-AUC, ROC-AUC, matriz de confusión, resultados al umbral 0,5, y media ± desviación estándar en validación cruzada.
+## 4. Baselines y métricas de éxito
 
-### 4.3 Criterio de éxito — tarea multiclase (secundaria)
+### Baselines
 
-La métrica principal es **Macro-F1**, complementada con precisión, recall y F1 por clase, F1 ponderado, balanced accuracy y matriz de confusión. El modelo principal deberá **superar a los dos baselines en Macro-F1 mediante validación cruzada estratificada de 5 particiones sobre el conjunto de entrenamiento** (media ± desviación estándar; la mejora sobre la regresión logística debe ser mayor que la desviación estándar del modelo principal) y mantener esa superioridad en la evaluación definitiva, realizada una única vez sobre el test oficial. Reportamos el techo estructural de Macro-F1 del dataset como contexto para interpretar los resultados, no como meta.
+- **Sin IA, tarea binaria:** marcar como ataque todo flujo en el que el destino no respondió ningún paquete (`dpkts == 0`), algo típico de escaneos y algunos DoS. La definimos y medimos solo con el train: recall 0,65, precisión 0,92, tasa de falsos positivos 0,12 y F1 0,76.
+- **Sin IA, tarea multiclase:** predecir siempre la clase más frecuente.
+- **Modelo simple de ML, en las dos tareas:** regresión logística con pesos por clase.
 
-### 4.4 Cómo validamos
+### Criterio de éxito de la tarea binaria
 
-- Cross-validation estratificada de 5 particiones sobre el conjunto de entrenamiento, con semilla fija, para comparar modelos y fijar el umbral binario.
-- **Sin búsqueda de hiperparámetros en el MVP:** la regresión logística y XGBoost usan parámetros razonables fijados de antemano y documentados en el código. Solo si el proyecto está terminado y documentado podríamos probar unas pocas configuraciones, siempre por validación cruzada.
-- Reajuste de cada modelo sobre todo el entrenamiento y **una única evaluación** sobre el test oficial. Después de esa evaluación no se modifican modelos ni umbrales.
-- Semilla global (42) en la división, los modelos y cualquier muestreo; versiones de librerías fijadas.
-- Transparencia: durante la auditoría inicial de los datos inspeccionamos el test para verificar su integridad (nulos, duplicados, distribución de clases, solapamiento con entrenamiento). Ninguna decisión de modelado ni meta se basó en esa inspección.
+Sobre el test, el modelo tiene que llegar a un **recall de ataques de al menos 0,90 con una tasa de falsos positivos que no supere la de la regla sin IA**. Además tiene que tener mejor F1 que los dos baselines.
 
-## 5. Alcance del MVP
+El umbral de decisión se elige únicamente con el train, usando las predicciones de la cross-validation: tomamos el umbral con mejor F1 entre los que dan un recall de 0,90 o más.
 
-### 5.1 MVP (lo que entregamos)
+También vamos a reportar precisión, F1, ROC-AUC, PR-AUC y la matriz de confusión, pero no las usamos como criterio para aprobar o rechazar el modelo.
 
-Un pipeline reproducible, ejecutable desde consola, que:
-1. verifica por MD5 y carga los dos CSV oficiales (`python -m src.data`);
-2. entrena y valida por CV los baselines, la regresión logística y XGBoost para cada tarea, guardando métricas y el pipeline entrenado (`python -m src.train --task binary|multiclass --model heuristic|lr|xgb`);
-3. evalúa una única vez sobre el test oficial y guarda métricas y matrices de confusión (`python -m src.evaluate --task ... --model ...`);
-4. predice sobre un CSV nuevo con el mismo preprocesamiento, validando el esquema de entrada (`python -m src.inference --input archivo.csv --task binary`);
-5. documenta en el README cómo recrear el entorno y reproducir cada número del informe.
+### Criterio de éxito de la tarea multiclase
 
-Incluye un notebook de EDA acotado (forma, tipos, nulos, distribución de etiquetas, desbalance, categóricas, duplicados, consistencia `label`/`attack_cat`, variables TTL).
+La métrica principal es el Macro-F1, acompañado del F1 de cada clase y la matriz de confusión. El modelo tiene que **superar en Macro-F1 a los dos baselines en la cross-validation sobre el train**, con una diferencia mayor que la desviación estándar entre folds, y mantener esa ventaja cuando lo evaluamos en el test.
 
-El proyecto se considera terminado cuando lo anterior funciona y está documentado. Nada de lo que sigue es necesario para darlo por terminado.
+### Validación
 
-### 5.2 Posibles extensiones, fuera del MVP
+- Cross-validation estratificada de 5 folds sobre el train, que usamos para comparar modelos y elegir el umbral.
+- No hacemos búsqueda de hiperparámetros. Tanto la regresión logística como XGBoost usan valores razonables que fijamos antes de empezar. Si al final nos sobra tiempo, podemos probar algunas configuraciones más, siempre con cross-validation.
+- Después se entrena cada modelo con todo el train y se evalúa **una sola vez** en el test. Una vez hecho eso, no se cambia nada del modelo.
+- Usamos una semilla fija (42) y versiones fijas de las librerías para que los resultados se puedan reproducir.
+- Antes de empezar revisamos el test solamente para verificar que los datos estuvieran bien (nulos, duplicados, distribución de clases). No tomamos ninguna decisión de modelado a partir de eso.
 
-Solo si el MVP está terminado y documentado, en este orden: unas pocas configuraciones adicionales de XGBoost; evaluación complementaria sobre el subconjunto del test disjunto de entrenamiento; ablación sin variables TTL; 2–4 tests automáticos; Random Forest; SHAP acotado.
+## 5. Alcance
 
-## 6. Límites del alcance (fuera del proyecto)
+Lo que vamos a entregar:
 
-- Inspección de paquetes o contenido; procesamiento de los archivos crudos, ground truth o pcap; re-derivación de la partición.
-- Captura de tráfico en vivo, integración con hardware de red, inferencia en tiempo real, sistema de prevención (bloqueo).
-- Robustez ante ataques adversariales.
-- Búsqueda de hiperparámetros como requisito; redes neuronales (MLP, autoencoder), PyTorch/TensorFlow, sobremuestreo sintético (SMOTE), PCA, selección de features.
-- API web, interfaz gráfica, base de datos, autenticación, MLflow, Docker, GitHub Pages.
+1. Un script que verifica y carga los datos.
+2. Un notebook con un análisis exploratorio corto.
+3. El entrenamiento y la cross-validation de los baselines, la regresión logística y XGBoost para las dos tareas.
+4. La evaluación final sobre el test, con las métricas y las matrices de confusión guardadas.
+5. Los modelos entrenados guardados en archivos.
+6. Un script de consola que recibe un CSV y devuelve las predicciones usando el mismo preprocesamiento del entrenamiento.
+7. Un README con los pasos para instalar todo y reproducir los resultados.
 
-## 7. Arquitectura técnica mínima
+Si terminamos esto con tiempo de sobra, las posibles mejoras son: probar algunas configuraciones más de XGBoost, entrenar sin las variables de TTL para ver cuánto dependen los modelos de ellas, sumar algunos tests automáticos y analizar qué variables pesan más en las predicciones.
 
-- **Preprocesamiento:** eliminar `id` y el target alternativo; `ColumnTransformer` con `OneHotEncoder(handle_unknown='ignore')` para `proto`, `service`, `state`; escalado estándar de las numéricas solo para la regresión logística; sin transformación para XGBoost. Todo dentro de un `Pipeline` de scikit-learn ajustado únicamente con datos de entrenamiento (o del fold de entrenamiento).
-- **Modelos:** heurística `dpkts == 0` / clase mayoritaria (sin IA); regresión logística (`class_weight='balanced'`); **XGBoost** (`tree_method='hist'`, `sample_weight` balanceado, semilla fija, parámetros fijados de antemano) como modelo principal.
-- **Artefactos:** un `.joblib` por tarea y modelo; métricas en JSON por corrida; figuras de matrices de confusión.
-- **Stack:** Python ≥ 3.10 en entorno virtual (`venv`), `requirements.txt` con versiones exactas; pandas, NumPy, scikit-learn, XGBoost, joblib, matplotlib, Jupyter.
+### Fuera del alcance
 
-## 8. Metodología de trabajo
+- Analizar el contenido de los paquetes, o usar los archivos crudos del dataset y las capturas pcap.
+- Capturar tráfico en vivo, detectar en tiempo real o bloquear ataques (el sistema solo detecta).
+- Robustez frente a ataques pensados para engañar al modelo.
+- Redes neuronales, generación de datos sintéticos (SMOTE) y búsqueda exhaustiva de hiperparámetros.
+- API web, interfaz gráfica, base de datos, usuarios o Docker.
 
-- Repositorio Git con rama `main` estable y ramas `feature/*` por incremento; commits semánticos que indican el problema resuelto y las horas invertidas (ej. `feat(train): CV 5-fold para XGBoost binario [3h]`).
-- Este Charter se publica como Issue #1 y como sección del README; los cambios de alcance se registran en issues.
-- `data/` excluido del control de versiones salvo `data/README.md` con la procedencia y los MD5.
-- Semilla global y versiones fijadas; cualquier persona debe poder recrear el entorno y obtener los mismos números.
-- Dedicación prevista: 3–4 horas por integrante y semana (menos en semanas de parciales); presupuesto total estimado de 35–45 horas de equipo.
+## 6. Arquitectura y herramientas
 
-## 9. Cronograma (7 semanas)
+- **Preprocesamiento:** se descartan `id` y la etiqueta que no corresponde a la tarea, para que el modelo no vea la respuesta. Las 3 variables categóricas pasan por one-hot encoding. Las numéricas se escalan solo para la regresión logística, porque XGBoost no lo necesita. Todo esto va dentro de un `Pipeline` de scikit-learn que se ajusta solamente con datos de entrenamiento.
+- **Modelos:** regla `dpkts == 0` y clase mayoritaria como baselines sin IA, regresión logística como baseline de ML y XGBoost como modelo principal.
+- **Herramientas:** Python en un entorno virtual, con pandas, NumPy, scikit-learn, XGBoost, joblib, matplotlib y Jupyter. Las versiones quedan fijadas en `requirements.txt`.
 
-| Semana | Objetivo | Entregable verificable |
-|---|---|---|
-| 1 | Repo, entorno, datos oficiales verificados, carga, EDA mínimo, Charter en Issue #1 | `requirements.txt`; `python -m src.data` verde; notebook de EDA |
-| 2 | Pipeline, guardas anti-leakage, métricas, baseline heurístico y regresión logística binaria end-to-end | primer resultado end-to-end (LR binaria con CV y umbral OOF) |
-| 3 | XGBoost binario; regresión logística y XGBoost multiclase reutilizando la infraestructura | tabla comparativa de CV; **congelamiento de modelos** |
-| 4 | Cierre de CV, congelamiento y evaluación final única en test (ambas tareas) | `reports/metrics/*.json`, matrices, `models/*.joblib` |
-| 5 | CLI de inferencia, README con resultados, correcciones | `python -m src.inference` funcionando desde un venv limpio |
-| 6 | Reproducibilidad (reproducción desde cero por el otro integrante), documentación final, ensayo de defensa | README final |
-| 7 | **Buffer** para parciales, imprevistos y correcciones de la cátedra | — |
+## 7. Forma de trabajo
 
-Cada hito tiene una semana de tolerancia; si una semana de parcial no permite trabajar, el cronograma lo absorbe con la holgura de las semanas 3–5 y la semana 7.
+- Trabajamos en un repositorio de GitHub. La rama `main` siempre tiene una versión estable, y cada tarea se desarrolla en su propia rama.
+- En los mensajes de commit indicamos qué se resolvió y cuántas horas llevó, por ejemplo `feat(data): carga y verificación de los CSV [1.5h]`.
+- Los datos no se suben al repositorio: en `data/README.md` explicamos cómo descargarlos y verificarlos.
+- Calculamos dedicarle entre 3 y 4 horas por persona por semana, menos en semanas de parciales. En total estimamos entre 35 y 45 horas entre los dos.
 
-## 10. Riesgos y simplificación
+## 8. Cronograma
 
-Si el núcleo se atrasa, simplificamos la forma sin tocar la sustancia: EDA solo con tablas; multiclase con reporte mínimo (macro-F1, F1 por clase, matriz), nunca eliminada; README mínimo pero completo. No se recortan: reproducibilidad, guardas anti-leakage, baselines, regresión logística, XGBoost, validación cruzada, evaluación única en test, pipeline guardado, inferencia por CLI, README y los requisitos explícitos de la consigna.
+| Semana | Qué hacemos |
+|---|---|
+| 1 | Repositorio, entorno, carga y verificación de los datos, análisis exploratorio |
+| 2 | Preprocesamiento, regla sin IA y regresión logística de punta a punta en la tarea binaria |
+| 3 | XGBoost binario, y regresión logística y XGBoost multiclase |
+| 4 | Cierre de la cross-validation y evaluación final en el test |
+| 5 | Script de predicción y README con los resultados |
+| 6 | Verificar que todo se pueda reproducir desde cero, documentación final y preparación de la defensa |
+| 7 | Margen para parciales, imprevistos y correcciones |
 
-## 11. Justificación de la elección
+Si alguna semana no podemos avanzar por parciales, usamos la semana 7 y la holgura de las semanas 3 a 5 para recuperar. Si nos atrasamos, simplificamos la presentación (por ejemplo, un análisis exploratorio con menos gráficos), pero no sacamos los baselines, la validación, la evaluación en el test, el script de predicción ni el README.
 
-Elegimos esta propuesta frente a otras alternativas (mantenimiento predictivo, fraude, análisis de conducción, agentes/LLM) porque combina de forma natural dos categorías de la cátedra, usa un dataset público, oficial y bien documentado, permite un baseline sin IA honesto y métricas de validación claras, y su alcance es compatible con la modalidad grupal y con el tiempo disponible. El análisis previo del dataset (solapamiento de etiquetas, sesgo del TTL, cambio de distribución) nos da además material sólido para discutir limitaciones en la defensa.
+## 9. Por qué elegimos este proyecto
+
+También consideramos mantenimiento predictivo, detección de fraude, análisis de conducción y un sistema con agentes basado en LLMs. Nos quedamos con este porque combina dos de las categorías que propone la consigna del trabajo integrador, el dataset es público y conocido, se puede armar un baseline sin IA con sentido y el alcance es razonable para dos personas en el tiempo que tenemos. Además, los problemas que encontramos en el dataset (clases que se superponen, el sesgo del TTL, las diferencias entre train y test) nos dan bastante para analizar y discutir en la defensa.

@@ -1,127 +1,117 @@
-# NIDS con Machine Learning sobre UNSW-NB15
+# Detección de intrusiones en redes con Machine Learning
 
-Trabajo Práctico Final de **Inteligencia Artificial** — Ingeniería en Informática, Universidad de la Defensa Nacional (CRUC IUA), 2026.
-Docente: Ing. Hernando Alexis González · Modalidad: **grupal**.
+Trabajo final de Inteligencia Artificial - Ingeniería en Informática - Universidad de la Defensa Nacional (CRUC IUA), 2026.
 
-Clasificador de tráfico de red que, a partir de las características de un flujo, decide si es **normal o un ataque** (tarea principal) y, como segunda tarea, a qué **categoría de ataque** pertenece. Se entrena y evalúa sobre la partición oficial del dataset [UNSW-NB15](https://research.unsw.edu.au/projects/unsw-nb15-dataset).
-
-> **Estado:** fase de planificación cerrada. Todavía no hay código ni resultados; las secciones de instalación, uso y resultados se completan a medida que avanza el desarrollo (ver [cronograma](#cronograma)).
+Docente: Ing. Hernando Alexis González. Modalidad grupal.
 
 ## Integrantes
 
 - Maximo Agustin Rodeyro
 - Lautaro Niccolini
 
-## Project Charter
+## De qué se trata
 
-La propuesta formal del proyecto (problema, PEAS, datos, métricas de éxito, baselines, alcance y límites) está en **[PROJECT_CHARTER_CORREGIDO.md](PROJECT_CHARTER_CORREGIDO.md)** y se publica también como Issue #1 del repositorio.
+Estamos armando un sistema de detección de intrusiones (NIDS) basado en Machine Learning. A partir de los datos de un flujo de red, el modelo decide si ese flujo es tráfico normal o un ataque. Como segunda tarea, también intenta predecir qué tipo de ataque es.
 
-Resumen:
+Trabajamos con el dataset [UNSW-NB15](https://research.unsw.edu.au/projects/unsw-nb15-dataset), usando la división en train y test que publicaron sus autores.
 
-| | |
-|---|---|
-| **Problema** | Detectar flujos de red maliciosos a partir de 42 variables del flujo (sin contenido de paquetes) |
-| **Tarea principal** | Binaria: `label` (0 = normal, 1 = ataque) |
-| **Tarea secundaria** | Multiclase: `attack_cat` (Normal + 9 categorías de ataque) |
-| **Baselines** | Regla sin IA `dpkts == 0` (binaria) / clase mayoritaria (multiclase); regresión logística |
-| **Modelo principal** | XGBoost con parámetros fijados de antemano |
-| **Validación** | Cross-validation estratificada de 5 particiones sobre train; **una única** evaluación final sobre el test oficial |
-| **Éxito binario** | Recall de ataque ≥ 0,90 con tasa de falsos positivos ≤ la del baseline heurístico; umbral elegido solo con predicciones out-of-fold de train |
-| **Éxito multiclase** | Superar a ambos baselines en Macro-F1 en CV sobre train y mantenerlo en el test (sin meta absoluta: el dataset tiene un techo estructural de ≈ 0,81) |
-| **Entregable** | Pipeline reproducible + herramienta de línea de comandos para predecir sobre un CSV de flujos |
+**Estado actual:** terminamos la planificación y estamos empezando el desarrollo. Las secciones de instalación, uso y resultados las vamos completando a medida que avanzamos.
+
+## Propuesta del proyecto
+
+La propuesta completa (problema, PEAS, datos, métricas de éxito, baselines y alcance) está en [PROJECT_CHARTER_CORREGIDO.md](PROJECT_CHARTER_CORREGIDO.md) y también en el Issue #1 del repositorio.
+
+En resumen:
+
+- **Tarea principal:** clasificación binaria (normal o ataque).
+- **Tarea secundaria:** clasificación multiclase (Normal o una de las 9 categorías de ataque).
+- **Baselines:** una regla sin IA (`dpkts == 0`, es decir, el destino no respondió) y una regresión logística.
+- **Modelo principal:** XGBoost.
+- **Validación:** cross-validation de 5 folds sobre el train. El test se usa una sola vez, al final.
+- **Objetivo en la tarea binaria:** detectar al menos el 90 % de los ataques sin tener más falsos positivos que la regla sin IA.
+- **Objetivo en la tarea multiclase:** superar a los baselines en Macro-F1.
 
 ## Datos
 
-Se usa exclusivamente la partición oficial de UNSW-NB15 descargada desde el sitio de UNSW Canberra:
-
-| Archivo | Registros | Uso |
+| Archivo | Registros | Para qué lo usamos |
 |---|---|---|
-| `UNSW_NB15_training-set.csv` | 175.341 | entrenamiento y validación cruzada |
-| `UNSW_NB15_testing-set.csv` | 82.332 | evaluación final (una sola vez) |
+| `UNSW_NB15_training-set.csv` | 175.341 | Entrenamiento y cross-validation |
+| `UNSW_NB15_testing-set.csv` | 82.332 | Evaluación final |
 
-Los datos **no se versionan**. Cómo descargarlos, dónde ubicarlos y cómo verificar su integridad (MD5): **[data/README.md](data/README.md)**.
+Los datos no están en el repositorio porque son pesados. En [data/README.md](data/README.md) explicamos cómo descargarlos y cómo comprobar que son los archivos correctos.
 
-> ⚠️ No usar la copia de Kaggle: tiene los nombres de train y test intercambiados.
+Ojo con la copia del dataset que hay en Kaggle: tiene los nombres de train y test intercambiados.
 
 ## Estructura del repositorio
 
 ```
-├── data/                 # datos (no versionados) — ver data/README.md
-│   └── raw/              # CSV oficiales sin modificar
-├── notebooks/            # EDA mínimo
-├── src/                  # código: datos, features, baselines, métricas, train, evaluate, inference
-├── models/               # pipelines entrenados (.joblib, no versionados; se regeneran)
-├── reports/
-│   ├── metrics/          # métricas de CV y test en JSON (versionadas)
-│   └── figures/          # matrices de confusión
-├── AUDITORIA_VIABILIDAD.md
-├── PLAN_IMPLEMENTACION.md
-├── PROJECT_CHARTER_CORREGIDO.md
-├── requirements.txt
-└── README.md
+data/            datos (no se suben, ver data/README.md)
+notebooks/       análisis exploratorio
+src/             código: carga de datos, preprocesamiento, entrenamiento, evaluación y predicción
+models/          modelos entrenados (no se suben, se generan al entrenar)
+reports/         métricas y gráficos de los resultados
 ```
 
-Las carpetas `notebooks/`, `src/`, `models/`, `reports/` y el archivo `requirements.txt` se crean durante el desarrollo.
+Las carpetas `notebooks/`, `src/`, `models/` y `reports/` las vamos creando durante el desarrollo.
 
 ## Instalación y uso
 
-> 🚧 En construcción. Flujo previsto:
+Todavía en construcción. La idea es que quede así:
 
 ```bash
-# 1. Entorno (Python >= 3.10)
+# Crear el entorno e instalar dependencias
 python -m venv .venv
-.venv\Scripts\activate          # Windows  |  source .venv/bin/activate  (Linux/Mac)
+.venv\Scripts\activate          # en Linux/Mac: source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Datos: descargar y ubicar según data/README.md, luego verificar
+# Verificar y cargar los datos
 python -m src.data
 
-# 3. Entrenar y validar (CV sobre train)
+# Entrenar y validar
 python -m src.train --task binary --model xgb
 
-# 4. Evaluación final sobre el test oficial
+# Evaluar en el test
 python -m src.evaluate --task binary --model xgb
 
-# 5. Predecir sobre un CSV nuevo
+# Predecir sobre un CSV nuevo
 python -m src.inference --input archivo.csv --task binary
 ```
 
-Todos los procesos aleatorios usan la semilla global `42` y las dependencias tienen versiones fijadas, de modo que los resultados sean reproducibles.
+Usamos la semilla 42 y versiones fijas de las librerías para que los resultados se puedan reproducir.
 
 ## Resultados
 
-> 🚧 Pendiente. Aquí se publicarán las métricas de validación cruzada (media ± desviación estándar) y de la evaluación final sobre el test para los baselines, la regresión logística y XGBoost en ambas tareas.
+Pendiente.
 
-## Decisiones metodológicas y limitaciones conocidas
+## Cosas a tener en cuenta del dataset
 
-- **Anti-leakage:** en cada tarea se eliminan de las variables de entrada `id` y el *otro* target (`attack_cat` en la binaria, `label` en la multiclase). Todo el preprocesamiento se ajusta solo con datos de entrenamiento.
-- **Uso del test:** se evalúa una única vez con los modelos congelados. Durante la auditoría inicial se inspeccionó solo para verificar su integridad; ninguna decisión de modelado ni meta se basó en él.
-- **Solapamiento de etiquetas:** el 17,4 % de las filas de train comparten exactamente las 42 variables con filas de otra categoría (sobre todo Analysis, Backdoor, DoS y Exploits), lo que limita la clasificación multiclase.
-- **Sesgo del dataset (TTL):** `sttl`, `dttl` y `ct_state_ttl` separan casi por sí solas ataque de normal por cómo se generó el tráfico sintético. No es fuga de información; se mantienen y se documentan como limitación.
-- **Cambio de distribución:** 68 % de ataques en train vs 55 % en test; el 5 % de las filas del test son copias exactas de filas de train.
+- Para que el modelo no "vea la respuesta", en cada tarea sacamos de la entrada la columna `id` y la etiqueta que no corresponde (`attack_cat` en la tarea binaria y `label` en la multiclase).
+- Hay registros con exactamente los mismos valores pero distinta categoría de ataque, sobre todo entre Analysis, Backdoor, DoS y Exploits. Por eso ningún modelo puede separar esas clases del todo.
+- Las variables de TTL (`sttl`, `dttl`, `ct_state_ttl`) separan casi solas el tráfico normal de los ataques, por cómo se generó el tráfico en el laboratorio. Las dejamos en el modelo y lo tomamos como una limitación del dataset.
+- En el train el 68 % de los registros son ataques y en el test el 55 %. Además, alrededor del 5 % de las filas del test también están en el train.
 
-El análisis completo está en **[AUDITORIA_VIABILIDAD.md](AUDITORIA_VIABILIDAD.md)**.
+El análisis completo de los datos está en [AUDITORIA_VIABILIDAD.md](AUDITORIA_VIABILIDAD.md).
 
 ## Cronograma
 
-| Semana | Objetivo |
+| Semana | Qué hacemos |
 |---|---|
-| 1 | Repositorio, entorno, datos verificados, EDA mínimo |
-| 2 | Pipeline, baseline heurístico y regresión logística binaria end-to-end |
-| 3 | XGBoost binario; regresión logística y XGBoost multiclase |
-| 4 | Congelamiento de modelos y evaluación final en test |
-| 5 | CLI de inferencia y README con resultados |
-| 6 | Reproducibilidad, documentación final y defensa |
-| 7 | Margen para imprevistos y correcciones |
+| 1 | Repositorio, entorno, carga de datos y análisis exploratorio |
+| 2 | Preprocesamiento, regla sin IA y regresión logística binaria |
+| 3 | XGBoost binario y modelos multiclase |
+| 4 | Evaluación final en el test |
+| 5 | Script de predicción y resultados en el README |
+| 6 | Revisión de reproducibilidad, documentación y defensa |
+| 7 | Margen para imprevistos |
 
-Detalle, estimación de horas y Definition of Done: **[PLAN_IMPLEMENTACION.md](PLAN_IMPLEMENTACION.md)**.
+El detalle está en [PLAN_IMPLEMENTACION.md](PLAN_IMPLEMENTACION.md).
 
-## Convenciones de trabajo
+## Forma de trabajo
 
-- Rama `main` estable; cada tarea en una rama `feature/<tema>`.
-- Mensajes de commit con el problema resuelto y las horas invertidas, por ejemplo: `feat(data): carga con verificación MD5 [1.5h]`.
+- La rama `main` tiene siempre una versión estable y cada tarea se hace en su propia rama.
+- En los commits ponemos qué se hizo y cuántas horas llevó, por ejemplo: `feat(data): carga y verificación de los CSV [1.5h]`.
 
 ## Referencias
 
-- Moustafa, N. & Slay, J. (2015). *UNSW-NB15: a comprehensive data set for network intrusion detection systems (UNSW-NB15 network data set)*. Military Communications and Information Systems Conference (MilCIS). https://doi.org/10.1109/MilCIS.2015.7348942
-- UNSW Canberra. *The UNSW-NB15 Dataset*. https://research.unsw.edu.au/projects/unsw-nb15-dataset
+- Moustafa, N. y Slay, J. (2015). UNSW-NB15: a comprehensive data set for network intrusion detection systems (UNSW-NB15 network data set). Military Communications and Information Systems Conference (MilCIS). https://doi.org/10.1109/MilCIS.2015.7348942
+- UNSW Canberra. The UNSW-NB15 Dataset. https://research.unsw.edu.au/projects/unsw-nb15-dataset
