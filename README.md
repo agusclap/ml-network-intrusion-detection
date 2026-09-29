@@ -9,8 +9,8 @@ Clasificador de tráfico de red que, a partir de las características de un fluj
 
 ## Integrantes
 
-- [Nombre completo alumno 1]
-- [Nombre completo alumno 2]
+- Maximo Agustin Rodeyro
+- Lautaro Niccolini
 
 ## Project Charter
 
