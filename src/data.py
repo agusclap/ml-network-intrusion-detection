@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.config import EXPECTED_MD5
+from src.config import EXPECTED_MD5, TASKS, TEST_CSV, TRAIN_CSV
 
 
 def md5_file(path: Path) -> str:
@@ -41,8 +41,46 @@ def verify_file(path: Path) -> None:
         )
 
 
+SPLITS = {"train": TRAIN_CSV, "test": TEST_CSV}
+
+
+def load_split(split: str) -> pd.DataFrame:
+    """Verifica y carga la partición oficial pedida ("train" o "test")."""
+    if split not in SPLITS:
+        raise ValueError(f"split debe ser 'train' o 'test', no {split!r}")
+    path = SPLITS[split]
+    verify_file(path)          # primero se verifica, después se lee
+    return pd.read_csv(path)
+
+
+def get_X_y(df: pd.DataFrame, task: str) -> tuple[pd.DataFrame, pd.Series]:
+    """Separa las variables de entrada (X) y el target (y) para la tarea indicada.
+
+    Saca de X el id, el target de la tarea y el target de la otra tarea,
+    para que el modelo no vea la respuesta.
+    """
+    if task not in TASKS:
+        raise ValueError(f"task debe ser 'binary' o 'multiclass', no {task!r}")
+    target = TASKS[task]["target"]
+    drop = TASKS[task]["drop"]
+
+    y = df[target]
+    X = df.drop(columns=drop + [target])
+
+    # Guarda: ninguna de las columnas prohibidas puede quedar en X
+    forbidden = set(drop) | {target}
+    leaked = forbidden & set(X.columns)
+    assert not leaked, f"Columnas prohibidas en X: {leaked}"
+
+    return X, y
+
+
 if __name__ == "__main__":
-    from src.config import TRAIN_CSV, TEST_CSV
-    for path in (TRAIN_CSV, TEST_CSV):
-        verify_file(path)
-        print(f"{path.name}: OK")
+    train = load_split("train")
+    test = load_split("test")
+    print(f"train: {train.shape} | test: {test.shape}")
+
+    for task in TASKS:
+        X, y = get_X_y(train, task)
+        print(f"\n[{task}] X: {X.shape} | y: {y.name}")
+        print(y.value_counts().to_string())
