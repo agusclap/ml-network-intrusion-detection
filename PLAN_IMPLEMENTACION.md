@@ -68,7 +68,7 @@ ProyectoIA2026/
 | F2 Datos + EDA | `data.py` (carga, MD5, X/y, guardas) 1,5 h + notebook de EDA mínimo 2,5 h | 4,0 | BAJO |
 | F3 Pipeline + métricas + baselines | `features.py`, `metrics.py`, `baselines.py` | 4,0 | BAJO |
 | F4 LR binaria end-to-end | `train.py` con CV manual + LR binaria + umbral OOF | 3,0 | BAJO |
-| F5 XGBoost + multiclase | XGBoost binario (parámetros fijos, `sample_weight`) 2,5 h + LR y XGBoost multiclase reutilizando `train.py` 2,5 h | 5,0 | MEDIO |
+| F5 XGBoost + multiclase | XGBoost binario (parámetros fijos, `sample_weight`) 2,5 h + LR y XGBoost multiclase reutilizando `train.py` 2,5 h, con `LabelEncoder` para `attack_cat` (XGBoost necesita clases 0..9; el encoder se ajusta con train y se guarda con el modelo) | 5,0 | MEDIO |
 | F6 Congelamiento + test | `evaluate.py`; una evaluación por tarea/modelo; JSON + matrices | 3,5 | MEDIO (disciplina) |
 | F7 CLI | `inference.py` con validación de esquema y categorías desconocidas | 3,0 | BAJO |
 | F8 README + reproducibilidad | instrucciones, tablas de resultados, limitaciones; reproducción de los 4 comandos desde un venv limpio por el otro integrante | 5,0 | BAJO |
@@ -83,7 +83,7 @@ Ningún extra está incluido en estas horas.
 |---|---|---|---|
 | **1** | F0, F1, F2 | Repo + venv + `requirements.txt`; `python -m src.data` verifica MD5 y carga; EDA mínimo; Charter en Issue #1 | 7–8,5 |
 | **2** | F3, F4 | **Primer modelo end-to-end**: heurística + LR binaria con CV y umbral OOF | 7 |
-| **3** | F5 | XGBoost binario; LR y XGBoost multiclase; tabla comparativa de CV | 5 |
+| **3** | F5 + complemento EDA | XGBoost binario; LR y XGBoost multiclase (con `LabelEncoder`); tabla comparativa de CV; celdas de outliers y entropía en el EDA | 5,75 |
 | **4** | F6 | **Congelamiento de modelos** y **evaluación única en test** (ambas tareas); métricas y matrices guardadas; `.joblib` | 3,5 |
 | **5** | F7, inicio F8 | CLI funcionando; README con resultados y correcciones | 5 |
 | **6** | F8, F9 | Reproducción desde venv limpio por el otro integrante; README final; ensayo de defensa | 6 |
@@ -106,7 +106,14 @@ Parámetros fijados de antemano (sin búsqueda):
 
 ## 7. EDA mínimo obligatorio
 
-Una notebook: shape de train y test; dtypes; nulos (esperado 0); distribución de `label` y `attack_cat` (tablas y un gráfico de barras); desbalance por clase; `describe()` de numéricas; cardinalidad y top valores de `proto`, `service`, `state` (categorías presentes solo en test); duplicados ignorando `id`; verificación `label = 0 ⇔ attack_cat = Normal`; cruce `sttl` × `label` (sesgo TTL); columnas a excluir (`id`, target alternativo). Nada más.
+Una notebook: shape de train y test; dtypes; nulos (esperado 0); distribución de `label` y `attack_cat` (tablas y un gráfico de barras); desbalance por clase; `describe()` de numéricas; cardinalidad y top valores de `proto`, `service`, `state` (categorías presentes solo en test); duplicados ignorando `id`; verificación `label = 0 ⇔ attack_cat = Normal`; cruce `sttl` × `label` (sesgo TTL); columnas a excluir (`id`, target alternativo).
+
+**Complemento para alinear con el teórico (≈ 45 min, semana 3):**
+- **Outliers (deck 05, "analizar si son errores o valores legítimos"):** contar outliers por la regla del rango intercuartílico (Q1 − 1,5·IQR, Q3 + 1,5·IQR) en algunas numéricas clave (`dur`, `sbytes`, `dbytes`, `spkts`, `rate`) sobre train, y una celda de texto con la decisión: no se eliminan ni recortan porque son valores legítimos del tráfico y pueden ser la señal del ataque.
+- **Entropía de Shannon (decks 03 y 05) de `label` y `attack_cat` en train**, normalizada por log(k), como medida del desbalance además del gráfico de barras.
+- **Duplicados:** en la celda final, justificar por qué no se eliminan (flujos reales repetidos; el benchmark conserva su proporción).
+
+Nada más.
 
 ## 8. Definition of Done (sin extras)
 
@@ -117,11 +124,11 @@ Cuando todos los ítems estén marcados, **el TP está terminado**. Ninguno de l
 - [ ] Charter corregido publicado como Issue #1 y en el README; DOCX actualizado con el mismo texto.
 - [ ] Repo con `data/ notebooks/ src/ models/ reports/`, `.gitignore`, rama `main` + ramas de feature, commits con horas.
 - [ ] Venv + `requirements.txt` con versiones exactas; Python ≥ 3.10; semilla global en `config.py`.
-- [ ] Notebook de EDA mínimo ejecutada de punta a punta.
+- [ ] Notebook de EDA mínimo ejecutada de punta a punta, con las celdas de outliers, entropía y la justificación de duplicados.
 - [ ] `src/data.py` elimina `id` y el target alternativo en ambas tareas.
 - [ ] Pipeline `ColumnTransformer` + `Pipeline` ajustado solo con datos de entrenamiento/fold.
 - [ ] Baseline heurístico (`dpkts == 0`) y clase mayoritaria evaluados.
-- [ ] LR y XGBoost (parámetros fijos) entrenados y validados por CV 5-fold (media ± std) en ambas tareas.
+- [ ] LR y XGBoost (parámetros fijos) entrenados y validados por CV 5-fold (media ± std) en ambas tareas; en multiclase, `attack_cat` codificada con `LabelEncoder` ajustado solo con train.
 - [ ] Umbral binario elegido con predicciones OOF según la regla pre-registrada.
 - [ ] Modelos congelados; test oficial evaluado **una sola vez** por tarea; métricas en `reports/metrics/*.json`; matrices en `reports/figures/`.
 - [ ] Criterios de éxito del Charter verificados y reportados (cumplidos o no, con explicación).
