@@ -28,9 +28,22 @@ Planteamos dos tareas sobre los mismos datos:
 | | |
 |---|---|
 | Performance | Tarea binaria: recall de ataques y tasa de falsos positivos, además de F1 y PR-AUC. Tarea multiclase: Macro-F1 y F1 por clase. |
-| Environment | Registros de flujos de red del dataset UNSW-NB15. Es un entorno parcialmente observable porque solo tenemos los metadatos del flujo y no el contenido de los paquetes. Es estático, ya que trabajamos sobre archivos CSV. |
+| Environment | Registros de flujos de red del dataset UNSW-NB15 (ver propiedades abajo). |
 | Actuators | Para cada flujo, el sistema devuelve una etiqueta (normal/ataque o categoría de ataque) junto con su probabilidad. |
 | Sensors | Las 42 variables que trae cada registro: protocolo, servicio, estado de la conexión, duración, bytes y paquetes por sentido, TTL, pérdidas, jitter, tiempos del handshake TCP, tamaño medio de los paquetes y contadores de conexiones recientes. |
+
+Propiedades del entorno:
+
+| Propiedad | Nuestro caso | Por qué |
+|---|---|---|
+| Observabilidad | Parcialmente observable | Solo tenemos los metadatos de cada flujo, no el contenido de los paquetes ni el resto del tráfico de la red. |
+| Determinismo | Estocástico | Encontramos flujos con exactamente los mismos valores en las 42 variables y distinta etiqueta: la misma entrada puede corresponder a salidas distintas. |
+| Secuencialidad | Episódico | Cada flujo se clasifica por separado y una decisión no cambia las siguientes. |
+| Dinamismo | Estático | Trabajamos sobre archivos fijos; el entorno no cambia mientras el sistema decide. |
+| Continuidad | Discreto | La acción es elegir una etiqueta de un conjunto finito. |
+| Agentes | Agente individual | Un solo sistema clasifica el tráfico. |
+
+En cuanto al tipo de agente, la regla sin IA que usamos como baseline (`dpkts == 0`) funciona como un agente reactivo simple: una regla si-entonces sobre la percepción actual. Los modelos de Machine Learning, en cambio, aprenden esas reglas a partir de los datos etiquetados.
 
 ## 3. Datos
 
@@ -49,7 +62,10 @@ Cuando revisamos los datos encontramos varias cosas a tener en cuenta:
 - **Desbalance.** En el train el 68 % de los registros son ataques, y en el test el 55 %. Entre las categorías de ataque la diferencia es mucho más grande: Generic tiene 40.000 registros y Worms solo 130. Para manejarlo usamos pesos por clase en los modelos y métricas que no se engañan con el desbalance (F1 por clase, Macro-F1, PR-AUC). No vamos a generar datos sintéticos.
 - **Registros iguales con distinta etiqueta.** Cerca del 17 % de las filas del train tiene exactamente los mismos valores en las 42 variables que otra fila con otra categoría de ataque. Pasa sobre todo entre Analysis, Backdoor, DoS y Exploits. Esto hace que ningún modelo pueda separar perfectamente esas clases: calculamos que el Macro-F1 máximo posible en el train ronda 0,81. Por eso no ponemos un valor fijo de Macro-F1 como objetivo.
 - **Variables de TTL.** `sttl`, `dttl` y `ct_state_ttl` separan casi solas el tráfico normal de los ataques, por cómo se generó el tráfico en el laboratorio. No se trata de data leakage porque el TTL es un dato que también está disponible en una red real, pero sí es un sesgo del dataset. Las dejamos en el modelo y lo mencionamos como limitación.
+- **Duplicados dentro del train.** El 38 % de las filas del train está repetida (mismos valores en todas las columnas salvo `id`). No las eliminamos: no son errores de carga sino flujos de red reales que se repiten (por ejemplo, muchas conexiones cortas idénticas durante un escaneo), y sacarlas cambiaría la proporción real de cada tipo de tráfico en el benchmark. Lo tenemos en cuenta al interpretar la cross-validation, que puede dar resultados algo optimistas porque una misma fila puede quedar en el fold de entrenamiento y en el de validación.
 - **Duplicados entre train y test.** Alrededor del 5 % de las filas del test también aparecen en el train. Evaluamos sobre el test completo porque es el benchmark oficial, y lo mencionamos como limitación.
+- **Outliers.** Varias variables numéricas tienen valores muy extremos (por ejemplo, en el train `sbytes` llega a casi 13 MB cuando la mediana es de 430 bytes). Los analizamos en el EDA, pero no los eliminamos ni los recortamos: en tráfico de red son valores legítimos (una descarga grande, un flujo largo) y muchas veces son justamente la señal de un ataque. XGBoost no se ve afectado por ellos, y para la regresión logística se estandarizan.
+- **Split oficial no estratificado.** La proporción de ataques es distinta en el train (68 %) y en el test (55 %), así que la partición oficial no está estratificada. No la cambiamos porque es el benchmark con el que se comparan otros trabajos, pero sí estratificamos los folds de la cross-validation para que cada fold tenga la misma proporción de clases que el train.
 
 ## 4. Baselines y métricas de éxito
 
@@ -103,9 +119,26 @@ Si terminamos esto con tiempo de sobra, las posibles mejoras son: probar algunas
 
 ## 6. Arquitectura y herramientas
 
-- **Preprocesamiento:** se descartan `id` y la etiqueta que no corresponde a la tarea, para que el modelo no vea la respuesta. Las 3 variables categóricas pasan por one-hot encoding. Las numéricas se escalan solo para la regresión logística, porque XGBoost no lo necesita. Todo esto va dentro de un `Pipeline` de scikit-learn que se ajusta solamente con datos de entrenamiento.
+- **Preprocesamiento:** se descartan `id` y la etiqueta que no corresponde a la tarea, para que el modelo no vea la respuesta. Las 3 variables categóricas pasan por one-hot encoding. Las numéricas se estandarizan solo para la regresión logística, porque es un modelo lineal y le afecta la escala; XGBoost trabaja con árboles y no lo necesita. Las columnas del one-hot no se escalan porque ya valen 0 o 1. Todo esto va dentro de un `Pipeline` de scikit-learn que se ajusta solamente con datos de entrenamiento (en la cross-validation, solo con los folds de entrenamiento) y después se aplica a los datos de validación y de test.
+- **Codificación de `proto`:** tiene 133 valores distintos, una cardinalidad alta para one-hot. Igual elegimos one-hot porque agrupamos en una sola columna las categorías con menos de 50 filas, lo que deja 188 variables en total frente a 175.341 observaciones de entrenamiento, una relación más que suficiente. Las alternativas para alta cardinalidad tienen problemas que preferimos evitar: el hashing tiene colisiones y el target encoding tiene riesgo de sobreajuste.
+- **Etiqueta multiclase:** `attack_cat` es texto, y XGBoost necesita las clases como números (0 a 9), así que la codificamos con label encoding. El encoder se ajusta con el train y se guarda junto con el modelo para poder traducir las predicciones de vuelta a nombres de categoría.
+- **Desbalance:** en lugar de remuestrear, usamos pesos por clase (`class_weight` en la regresión logística y `sample_weight` en XGBoost), calculados solo con los datos de entrenamiento de cada fold. El test nunca se balancea.
 - **Modelos:** regla `dpkts == 0` y clase mayoritaria como baselines sin IA, regresión logística como baseline de ML y XGBoost como modelo principal.
 - **Herramientas:** Python en un entorno virtual, con pandas, NumPy, scikit-learn, XGBoost, joblib, matplotlib y Jupyter. Las versiones quedan fijadas en `requirements.txt`.
+
+### Relación con los contenidos de la materia
+
+| Decisión del proyecto | Tema del teórico |
+|---|---|
+| PEAS, propiedades del entorno y tipo de agente | Agentes |
+| Desbalance detectado con gráficos de barras y proporciones de clase | Procesamiento y limpieza de datos |
+| Tratamiento de duplicados y outliers (analizados y justificados) | Procesamiento y limpieza de datos |
+| Codificación según la cardinalidad (one-hot) y label encoding del target | Procesamiento y limpieza de datos |
+| Split antes de transformar; calcular las transformaciones con train y aplicarlas al resto | Procesamiento y nuevas features |
+| Estandarización para el modelo lineal; las variables del one-hot no se escalan | Procesamiento y nuevas features |
+| Pesos por clase para mitigar el desbalance; el test nunca se balancea | Procesamiento y nuevas features |
+| Hiperparámetros fijados antes de entrenar, K-fold sobre train y test reservado para la evaluación final | Aprendizaje automático |
+| Priorizar el recall porque no todos los errores tienen la misma gravedad | Aprendizaje automático |
 
 ## 7. Forma de trabajo
 
