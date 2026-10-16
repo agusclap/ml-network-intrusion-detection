@@ -83,13 +83,15 @@ Ningún extra está incluido en estas horas.
 |---|---|---|---|
 | **1** | F0, F1, F2 | Repo + venv + `requirements.txt`; `python -m src.data` verifica MD5 y carga; EDA mínimo; Charter en Issue #1 | 7–8,5 |
 | **2** | F3, F4 | **Primer modelo end-to-end**: heurística + LR binaria con CV y umbral OOF | 7 |
-| **3** | F5 + complemento EDA | XGBoost binario; LR y XGBoost multiclase (con `LabelEncoder`); tabla comparativa de CV; celdas de outliers y entropía en el EDA | 5,75 |
-| **4** | F6 | **Congelamiento de modelos** y **evaluación única en test** (ambas tareas); métricas y matrices guardadas; `.joblib` | 3,5 |
-| **5** | F7, inicio F8 | CLI funcionando; README con resultados y correcciones | 5 |
+| **3** | F5 (binaria) + complemento EDA + README | XGBoost binario ✅; celdas de outliers y entropía en el EDA; README con estado y resultados de CV, listo para la revisión con la cátedra | 3 |
+| **4** | Revisión con la cátedra + F5 (multiclase) | Reunión de feedback; aplicar correcciones; LR y XGBoost multiclase (con `LabelEncoder`); tabla comparativa de CV | 5 |
+| **5** | F6 + F7 | **Congelamiento de modelos** y **evaluación única en test** (ambas tareas), después de la revisión; métricas y matrices; CLI funcionando | 6,5 |
 | **6** | F8, F9 | Reproducción desde venv limpio por el otro integrante; README final; ensayo de defensa | 6 |
 | **7** | — | **BUFFER real**: parciales, imprevistos, correcciones de la cátedra | 0–6 |
 
 Suma planificada semanas 1–6: 33,5–35 h, con las semanas 3, 4 y 5 por debajo del máximo semanal.
+
+**Ajuste del 16/10:** el primer modelo end-to-end se cerró el 16/10 (semana 3, dentro del límite). La evaluación del test se movió a la semana 5 para hacerla **después** de la revisión: así cualquier corrección del docente se aplica sin haber mirado el test. Se respetan los límites duros (test ≤ semana 5) y la semana 7 sigue libre como buffer.
 
 **Regla de absorción de semanas de parcial:** cada hito tiene una semana de tolerancia. Si una semana rinde 0–4 h, el hito se corre una semana y se compensa con la holgura de las semanas 3–5 y con la semana 7. Límites duros: primer modelo end-to-end a más tardar en la semana 3; test evaluado a más tardar en la semana 5; README reproducible a más tardar en la semana 7. En una semana de parcial solo se hacen tareas de ≤ 1 h (issues, README) o nada.
 
