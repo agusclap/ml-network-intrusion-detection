@@ -7,6 +7,8 @@ from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
 import argparse
 import json
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
 
 import joblib
 
@@ -47,9 +49,20 @@ def fit_model(clf, model: str, X, y):
     return clf
 
 
+def load_xy(task: str):
+    """Carga el train. En multiclase, codifica attack_cat como enteros 0..9 con LabelEncoder."""
+    X, y = get_X_y(load_split("train"), task)
+    encoder = None
+    if task == "multiclass":
+        encoder = LabelEncoder().fit(y)
+        y = pd.Series(encoder.transform(y), index=y.index, name=y.name)
+    return X, y, encoder
+
+
 def cross_validate(task: str, model: str):
     """Corre la CV de 5 folds. Devuelve las métricas de cada fold y los scores out-of-fold."""
-    X, y = get_X_y(load_split("train"), task)
+    X, y, encoder = load_xy(task)
+
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
 
     fold_metrics = []
@@ -59,7 +72,6 @@ def cross_validate(task: str, model: str):
         X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
         y_tr, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
-        clf = build_model(task, model)       # modelo nuevo en cada fold
         clf = fit_model(build_model(task, model), model, X_tr, y_tr)
 
 
@@ -67,12 +79,18 @@ def cross_validate(task: str, model: str):
         y_score = clf.predict_proba(X_val)[:, 1] if task == "binary" else None
         if task == "binary":
             oof_scores[val_idx] = y_score
-
-        m = compute_metrics(task, y_val, y_pred, y_score=y_score)
+            m = compute_metrics(task, y_val, y_pred, y_score=y_score)
+            print(f"fold {k}: f1={m['f1']:.3f}  recall={m['recall']:.3f}  fpr={m['fpr']:.3f}")
+        else:
+            # las métricas se calculan con los nombres reales, para que el F1 por clase sea legible
+            m = compute_metrics(task,
+                                encoder.inverse_transform(y_val),
+                                encoder.inverse_transform(y_pred),
+                                labels=encoder.classes_)
+            print(f"fold {k}: macro_f1={m['macro_f1']:.3f}  weighted_f1={m['weighted_f1']:.3f}")
         fold_metrics.append(m)
-        print(f"fold {k}: f1={m['f1']:.3f}  recall={m['recall']:.3f}  fpr={m['fpr']:.3f}")
+    return fold_metrics, oof_scores, y, encoder
 
-    return fold_metrics, oof_scores, y
 
 
 SUMMARY_KEYS = {
@@ -83,7 +101,7 @@ SUMMARY_KEYS = {
 
 def run(task: str, model: str) -> None:
     print(f"\n=== {task} / {model} ===")
-    fold_metrics, oof_scores, y = cross_validate(task, model)
+    fold_metrics, oof_scores, y, encoder = cross_validate(task, model)
 
     # 1. Media ± desviación estándar de cada métrica en los 5 folds
     summary = {}
@@ -94,6 +112,7 @@ def run(task: str, model: str) -> None:
 
     # 2. Umbral elegido SOLO con las predicciones out-of-fold del train
     threshold = None
+    oof_at_threshold = None
     if task == "binary" and model != "heuristic":
         threshold = select_binary_threshold(y, oof_scores, min_recall=0.90)
         oof_pred = (oof_scores >= threshold).astype(int)
@@ -102,16 +121,18 @@ def run(task: str, model: str) -> None:
               f"fpr {oof_at_threshold['fpr']:.4f}, f1 {oof_at_threshold['f1']:.4f}")
 
     # 3. Modelo final: se entrena con TODO el train
-    X_full, y_full = get_X_y(load_split("train"), task)
+    X_full, y_full, encoder = load_xy(task)
     final = fit_model(build_model(task, model), model, X_full, y_full)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    joblib.dump({"pipeline": final, "threshold": threshold},
-                MODELS_DIR / f"{task}_{model}.joblib")
+    joblib.dump({"pipeline": final, "threshold": threshold, "label_encoder": encoder},
+            MODELS_DIR / f"{task}_{model}.joblib")
+
 
     # 4. Métricas de CV a JSON
     METRICS_DIR.mkdir(parents=True, exist_ok=True)
     result = {"task": task, "model": model, "n_folds": N_FOLDS, "seed": SEED,
-              "cv_summary": summary, "threshold": threshold, "folds": fold_metrics}
+            "cv_summary": summary, "threshold": threshold,
+            "oof_at_threshold": oof_at_threshold, "folds": fold_metrics}
     with open(METRICS_DIR / f"{task}_{model}_cv.json", "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
 

@@ -30,6 +30,7 @@
     }
   },
   "threshold": null,
+  "oof_at_threshold": null,
   "folds": [
     {
       "accuracy": 0.7223758875360005,
