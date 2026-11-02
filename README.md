@@ -17,17 +17,16 @@ Trabajamos con el dataset [UNSW-NB15](https://research.unsw.edu.au/projects/unsw
 
 ## Estado actual
 
-Ya tenemos el primer modelo funcionando de punta a punta en la tarea binaria, validado con cross-validation sobre el train. Todavía no evaluamos sobre el test: lo vamos a hacer una sola vez, cuando los modelos estén terminados.
+Tenemos el pipeline completo funcionando en las dos tareas, validado con cross-validation sobre el train, y un script que clasifica un CSV de flujos con el modelo guardado. Todavía no evaluamos sobre el test: lo vamos a hacer una sola vez, con los modelos ya cerrados.
 
 - [x] Carga de los datos oficiales con verificación de integridad (MD5)
-- [x] Análisis exploratorio ([notebooks/01_eda_minimo.ipynb](notebooks/01_eda_minimo.ipynb))
+- [x] Análisis exploratorio, con outliers, entropía y duplicados ([notebooks/01_eda_minimo.ipynb](notebooks/01_eda_minimo.ipynb))
 - [x] Preprocesamiento: one-hot de las categóricas y estandarización de las numéricas para la regresión logística
 - [x] Baselines: regla sin IA (`dpkts == 0`) y clase mayoritaria
-- [x] Cross-validation de 5 folds con la regla, la regresión logística y XGBoost en la tarea binaria
-- [ ] Complemento del análisis exploratorio: outliers, entropía y duplicados
-- [ ] Tarea multiclase
+- [x] Cross-validation agrupada de 5 folds con la regla, la regresión logística y XGBoost, en las dos tareas
+- [x] Script de predicción por consola
 - [ ] Evaluación final sobre el test
-- [ ] Script de predicción por consola
+- [ ] Revisión de reproducibilidad y documentación final
 
 ## Propuesta del proyecto
 
@@ -39,7 +38,7 @@ En resumen:
 - **Tarea secundaria:** clasificación multiclase (Normal o una de las 9 categorías de ataque).
 - **Baselines:** una regla sin IA (`dpkts == 0`, es decir, el destino no respondió) y una regresión logística.
 - **Modelo principal:** XGBoost.
-- **Validación:** cross-validation de 5 folds sobre el train. El test se usa una sola vez, al final.
+- **Validación:** cross-validation de 5 folds sobre el train, agrupando las filas repetidas para que no queden en entrenamiento y validación a la vez. El test se usa una sola vez, al final.
 - **Objetivo en la tarea binaria:** detectar al menos el 90 % de los ataques sin tener más falsos positivos que la regla sin IA.
 - **Objetivo en la tarea multiclase:** superar a los baselines en Macro-F1.
 
@@ -58,6 +57,7 @@ Ojo con la copia del dataset que hay en Kaggle: tiene los nombres de train y tes
 
 ```
 data/              datos (no se suben, ver data/README.md)
+examples/          CSV de ejemplo para probar el script de predicción
 notebooks/         análisis exploratorio
 src/
   config.py        semilla, rutas, hashes de los datos, columnas e hiperparámetros
@@ -66,6 +66,7 @@ src/
   baselines.py     regla sin IA y clase mayoritaria
   metrics.py       métricas y elección del umbral
   train.py         cross-validation, umbral y entrenamiento del modelo final
+  inference.py     predicción sobre un CSV de flujos con un modelo guardado
 models/            modelos entrenados (no se suben, se generan con train.py)
 reports/metrics/   métricas de la cross-validation en JSON
 ```
@@ -83,43 +84,65 @@ pip install -r requirements.txt
 # Descargar los datos según data/README.md y verificarlos
 python -m src.data
 
-# Cross-validation y entrenamiento final (tarea binaria)
-python -m src.train --model heuristic
-python -m src.train --model lr
-python -m src.train --model xgb
+# Cross-validation y entrenamiento final
+python -m src.train --model xgb                       # tarea binaria (también: heuristic, lr)
+python -m src.train --task multiclass --model xgb     # tarea multiclase
+
+# Clasificar un CSV de flujos con el modelo guardado
+python -m src.inference --input examples/flujos_ejemplo.csv --task binary --output predicciones.csv
 ```
 
-Cada corrida de `train.py` imprime las métricas de cada fold y su promedio, guarda el modelo entrenado con todo el train en `models/` y las métricas en `reports/metrics/`.
+Cada corrida de `train.py` imprime las métricas de cada fold y su promedio, guarda el modelo entrenado con todo el train en `models/` y las métricas en `reports/metrics/`. `inference.py` verifica que el CSV tenga las columnas que espera el modelo, aplica el mismo preprocesamiento del entrenamiento y el umbral guardado, y escribe la predicción y la probabilidad de cada flujo.
 
 Usamos la semilla 42 y versiones fijas de las librerías, así que los resultados se tienen que poder reproducir exactamente.
 
-Todavía falta: la tarea multiclase, la evaluación sobre el test (`src/evaluate.py`) y el script de predicción (`src/inference.py`).
+Todavía falta la evaluación sobre el test (`src/evaluate.py`).
 
 ## Resultados
 
-### Tarea binaria: cross-validation de 5 folds sobre el train
+Todos los resultados son de cross-validation de 5 folds sobre el train (media ± desviación estándar). Las filas idénticas se agrupan en el mismo fold, así que el modelo nunca se evalúa con una fila que ya vio al entrenar.
 
-Media ± desviación estándar de los 5 folds, con el umbral por defecto (0,5):
+### Tarea binaria
+
+Con el umbral por defecto (0,5):
 
 | Modelo | F1 | Recall | Precisión | Tasa de falsos positivos | ROC-AUC |
 |---|---|---|---|---|---|
-| Regla sin IA (`dpkts == 0`) | 0,762 ± 0,002 | 0,650 ± 0,002 | 0,921 ± 0,002 | 0,119 ± 0,003 | 0,766 |
-| Regresión logística | 0,951 ± 0,001 | 0,952 ± 0,002 | 0,949 ± 0,001 | 0,108 ± 0,001 | 0,984 |
-| XGBoost | **0,967 ± 0,001** | **0,957 ± 0,001** | **0,978 ± 0,001** | **0,046 ± 0,003** | **0,994** |
+| Regla sin IA (`dpkts == 0`) | 0,762 ± 0,003 | 0,650 ± 0,004 | 0,921 ± 0,001 | 0,119 ± 0,002 | 0,766 |
+| Regresión logística | 0,950 ± 0,001 | 0,952 ± 0,001 | 0,949 ± 0,001 | 0,109 ± 0,002 | 0,984 |
+| XGBoost | **0,965 ± 0,001** | **0,955 ± 0,002** | **0,976 ± 0,001** | **0,050 ± 0,002** | **0,993** |
 
 Con el umbral elegido usando las predicciones out-of-fold (el de mejor F1 entre los que dan recall de 0,90 o más):
 
 | Modelo | Umbral | Recall | Tasa de falsos positivos | F1 |
 |---|---|---|---|---|
-| Regresión logística | 0,368 | 0,982 | 0,161 | 0,954 |
-| XGBoost | 0,347 | 0,978 | 0,076 | 0,971 |
-
-Qué vemos hasta ahora:
+| Regresión logística | 0,367 | 0,982 | 0,162 | 0,954 |
+| XGBoost | 0,358 | 0,974 | 0,080 | 0,968 |
 
 - Los dos modelos de ML superan ampliamente a la regla sin IA, que solo detecta el 65 % de los ataques.
 - XGBoost detecta casi la misma proporción de ataques que la regresión logística, pero con menos de la mitad de falsos positivos. La regresión logística separa las clases con una frontera lineal; los árboles de XGBoost pueden combinar condiciones sobre varias variables, y en este problema eso marca la diferencia.
 - Con su umbral, XGBoost cumple el criterio de la tarea binaria (recall de al menos 0,90 con menos falsos positivos que la regla sin IA). La regresión logística, para llegar a ese recall, tiene más falsos positivos que la regla.
-- La desviación estándar entre folds es muy chica en todos los casos: los modelos son estables.
+
+### Tarea multiclase
+
+| Modelo | Macro-F1 | Weighted-F1 | Exactitud balanceada |
+|---|---|---|---|
+| Clase mayoritaria | 0,048 ± 0,000 | 0,155 | 0,100 |
+| Regresión logística | 0,412 ± 0,005 | 0,716 | 0,585 |
+| XGBoost | **0,620 ± 0,008** | **0,803** | **0,700** |
+
+F1 por clase de XGBoost: Generic 0,990 · Normal 0,912 · Reconnaissance 0,827 · Fuzzers 0,750 · Shellcode 0,702 · Worms 0,680 · Exploits 0,652 · DoS 0,379 · Analysis 0,184 · Backdoor 0,121.
+
+- XGBoost supera a los dos baselines por mucho más que la variación entre folds, así que cumple el criterio de la tarea multiclase.
+- Reconoce bien incluso clases muy chicas como Worms y Shellcode, gracias a los pesos por clase.
+- Analysis, Backdoor y DoS quedan bajas en todos los modelos: muchas de sus filas tienen exactamente los mismos valores que filas de otras categorías, sobre todo Exploits, y ningún modelo puede distinguirlas.
+
+### Qué cambió al agrupar las filas repetidas
+
+Antes usábamos un `StratifiedKFold` común. Por recomendación de la cátedra pasamos a `StratifiedGroupKFold`, que pone todas las repeticiones de una fila en el mismo fold:
+
+- En la tarea binaria, XGBoost bajó un poco (F1 de 0,967 a 0,965, tasa de falsos positivos de 4,6 % a 5,0 %): parte del resultado anterior venía de filas de validación que el modelo ya había visto al entrenar.
+- En la multiclase, Analysis, DoS y Backdoor mejoraron (de 0,12 a 0,18, de 0,32 a 0,38 y de 0,07 a 0,12). Lo más probable es que antes, al ver en entrenamiento una fila repetida con la etiqueta más frecuente de su grupo, el modelo aprendiera esa etiqueta y fallara en validación con las repeticiones de las clases minoritarias.
 
 Estos números son de cross-validation. El resultado definitivo va a salir de la evaluación sobre el test, que todavía no hicimos.
 
@@ -129,10 +152,10 @@ Estos números son de cross-validation. El resultado definitivo va a salir de la
 - Hay registros con exactamente los mismos valores pero distinta categoría de ataque, sobre todo entre Analysis, Backdoor, DoS y Exploits. Por eso ningún modelo puede separar esas clases del todo.
 - Las variables de TTL (`sttl`, `dttl`, `ct_state_ttl`) separan casi solas el tráfico normal de los ataques, por cómo se generó el tráfico en el laboratorio. Las dejamos en el modelo y lo tomamos como una limitación del dataset.
 - En el train el 68 % de los registros son ataques y en el test el 55 %. Además, alrededor del 5 % de las filas del test también están en el train.
-- El 38 % de las filas del train está repetido. No lo eliminamos porque son flujos reales que se repiten, no errores de carga; por eso la cross-validation puede dar resultados algo optimistas.
+- El 38 % de las filas del train está repetido. No lo eliminamos porque son flujos reales que se repiten, no errores de carga; para que no infle la validación, la cross-validation agrupa las repeticiones en el mismo fold.
 - Los valores extremos de las variables numéricas tampoco se eliminan: en tráfico de red son legítimos y muchas veces son la señal del ataque.
 
-La justificación de cada decisión y su relación con el teórico de la materia está en la sección 3 y en la tabla "Relación con los contenidos de la materia" del [Charter](PROJECT_CHARTER_CORREGIDO.md). El análisis completo de los datos está en [AUDITORIA_VIABILIDAD.md](AUDITORIA_VIABILIDAD.md).
+La justificación de cada decisión y su relación con el teórico de la materia está en la sección 3 y en la tabla "Relación con los contenidos de la materia" del [Charter](PROJECT_CHARTER_CORREGIDO.md). El análisis completo de los datos está en [AUDITORIA_VIABILIDAD.md](AUDITORIA_VIABILIDAD.md) y un resumen del proyecto en [RESUMEN_PROYECTO.md](RESUMEN_PROYECTO.md).
 
 ## Cronograma
 
@@ -140,13 +163,13 @@ La justificación de cada decisión y su relación con el teórico de la materia
 |---|---|---|---|
 | 1 | 28/9 – 4/10 | Repositorio, entorno, carga de datos y análisis exploratorio | Hecho |
 | 2 | 5/10 – 11/10 | Preprocesamiento, regla sin IA y regresión logística binaria | Hecho |
-| 3 | 12/10 – 18/10 | XGBoost binario y complemento del análisis exploratorio | En curso |
-| 4 | 19/10 – 25/10 | Revisión con la cátedra y tarea multiclase | |
-| 5 | 26/10 – 1/11 | Evaluación final en el test y script de predicción | |
-| 6 | 2/11 – 8/11 | Revisión de reproducibilidad, documentación y defensa | |
-| 7 | 9/11 – 15/11 | Margen para imprevistos | |
+| 3 | 12/10 – 18/10 | XGBoost binario y complemento del análisis exploratorio | Hecho |
+| 4 | 19/10 – 25/10 | Tarea multiclase | Hecho |
+| 5 | 26/10 – 1/11 | Consulta con la cátedra, script de predicción y validación agrupada | Hecho |
+| 6 | 2/11 – 8/11 | Evaluación final en el test, figuras y documentación | En curso |
+| 7 | 9/11 – 15/11 | Revisión de reproducibilidad, preparación de la defensa y margen para imprevistos | |
 
-La evaluación sobre el test la dejamos para después de la revisión con la cátedra, para poder incorporar sus correcciones sin haber mirado todavía el test. El detalle está en [PLAN_IMPLEMENTACION.md](PLAN_IMPLEMENTACION.md).
+La evaluación sobre el test la dejamos para después de la consulta con la cátedra, para incorporar sus correcciones sin haber mirado todavía el test. El detalle está en [PLAN_IMPLEMENTACION.md](PLAN_IMPLEMENTACION.md).
 
 ## Forma de trabajo
 
