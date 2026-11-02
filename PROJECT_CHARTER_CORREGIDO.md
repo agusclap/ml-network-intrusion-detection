@@ -83,6 +83,8 @@ El umbral de decisión se elige únicamente con el train, usando las prediccione
 
 También vamos a reportar precisión, F1, ROC-AUC, PR-AUC y la matriz de confusión, pero no las usamos como criterio para aprobar o rechazar el modelo.
 
+Priorizamos el recall (sensibilidad) porque en este problema el error más grave es el falso negativo (error de tipo II): un ataque que pasa sin ser detectado. Una falsa alarma (falso positivo, error de tipo I) tiene un costo, pero mucho menor, y por eso la controlamos con la tasa de falsos positivos, que es 1 − especificidad. Es el mismo razonamiento que en la detección de enfermedades, donde se prefiere detectar todos los casos aunque haya algunas falsas alarmas. En otros problemas el criterio se invierte: en un filtro de spam, por ejemplo, lo grave es el falso positivo, porque se pierde un correo legítimo. No usamos la exactitud (accuracy) como métrica principal porque con clases desbalanceadas puede ser alta aunque el modelo no detecte nada útil.
+
 ### Criterio de éxito de la tarea multiclase
 
 La métrica principal es el Macro-F1, acompañado del F1 de cada clase y la matriz de confusión. El modelo tiene que **superar en Macro-F1 a los dos baselines en la cross-validation sobre el train**, con una diferencia mayor que la desviación estándar entre folds, y mantener esa ventaja cuando lo evaluamos en el test.
@@ -145,6 +147,10 @@ Si terminamos esto con tiempo de sobra, las posibles mejoras son: probar algunas
 | One-hot para variables nominales y por qué no eliminamos una columna (trampa de las dummies) | Regresión |
 | Regresión logística con regularización L2 (equivalente a Ridge) como baseline de ML | Regresión |
 | Por qué no aplicamos selección de variables (forward, backward, stepwise) | Regresión |
+| Regresión logística binaria y multiclase (sigmoide, ajuste por máxima verosimilitud con gradiente descendente) | Clasificación |
+| Matriz de confusión, errores de tipo I y II, y por qué el falso negativo es el error más grave en un NIDS | Clasificación |
+| Métricas: recall (sensibilidad), precisión, F1, tasa de falsos positivos (1 − especificidad), exactitud balanceada y ROC-AUC; no usar accuracy con clases desbalanceadas | Clasificación |
+| Umbral de decisión distinto de 0,5, elegido con las predicciones de la cross-validation | Clasificación |
 
 ## 7. Forma de trabajo
 
