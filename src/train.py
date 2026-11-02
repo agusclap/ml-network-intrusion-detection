@@ -1,7 +1,7 @@
 """Entrenamiento con cross-validation estratificada sobre el train oficial."""
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.pipeline import Pipeline
 from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
@@ -63,12 +63,19 @@ def cross_validate(task: str, model: str):
     """Corre la CV de 5 folds. Devuelve las métricas de cada fold y los scores out-of-fold."""
     X, y, encoder = load_xy(task)
 
-    skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
+    # Filas con exactamente la misma X van al mismo grupo, y cada grupo cae entero en un solo fold.
+    # Así ninguna fila repetida está a la vez en entrenamiento y en validación (recomendación de la cátedra).
+    groups = X.groupby(list(X.columns), sort=False, dropna=False).ngroup()
+    sgkf = StratifiedGroupKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
+
 
     fold_metrics = []
     oof_scores = np.zeros(len(y))     # probabilidad de ataque para cada fila (binaria)
 
-    for k, (train_idx, val_idx) in enumerate(skf.split(X, y), start=1):
+    for k, (train_idx, val_idx) in enumerate(sgkf.split(X, y, groups), start=1):
+        
+        assert not set(groups.iloc[train_idx]) & set(groups.iloc[val_idx]), "un grupo quedó en train y validación"
+
         X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
         y_tr, y_val = y.iloc[train_idx], y.iloc[val_idx]
 

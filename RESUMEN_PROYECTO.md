@@ -1,6 +1,6 @@
 # Resumen del proyecto: detección de intrusiones con Machine Learning
 
-Documento de estudio para entender el proyecto completo: qué buscamos, cómo está armado, qué resultados tenemos, qué significan y cómo se calculan. Estado al 26/10/2026.
+Documento de estudio para entender el proyecto completo: qué buscamos, cómo está armado, qué resultados tenemos, qué significan y cómo se calculan. Estado al 2/11/2026.
 
 ---
 
@@ -131,7 +131,9 @@ vuelta 5:  [TRAIN][TRAIN][TRAIN][TRAIN][VAL ]  → métricas 5
 resultado = media ± desviación estándar de las 5
 ```
 
-En cada vuelta se entrena un modelo nuevo con 4 partes y se evalúa con la quinta, que no vio. Los folds son **estratificados**: cada uno tiene la misma proporción de clases que el train completo. La **desviación estándar** dice qué tan estable es el modelo: si es chica, el resultado no depende de qué datos le tocaron.
+En cada vuelta se entrena un modelo nuevo con 4 partes y se evalúa con la quinta, que no vio. Los folds son **estratificados**: cada uno tiene la misma proporción de clases que el train completo (68 % de ataques).
+
+**Folds agrupados (`StratifiedGroupKFold`).** El 38 % del train son filas repetidas. Si los folds se armaran al azar, las repeticiones de una misma fila podrían caer en entrenamiento y en validación a la vez, y el modelo "acertaría" en validación filas que ya memorizó al entrenar: las métricas saldrían infladas. Por eso, siguiendo la recomendación de la cátedra, las filas con exactamente los mismos valores en las 42 variables forman un **grupo**, y cada grupo cae entero en un solo fold. La **desviación estándar** dice qué tan estable es el modelo: si es chica, el resultado no depende de qué datos le tocaron.
 
 ### Predicciones out-of-fold (OOF)
 
@@ -156,22 +158,22 @@ Los 5 modelos de la CV solo sirven para **medir**. El modelo que se guarda se en
 
 ### La matriz de confusión (binaria)
 
-Todo sale de contar los cuatro casos posibles. Ejemplo real: XGBoost, predicciones OOF con su umbral (0,347), sobre las 175.341 filas del train:
+Todo sale de contar los cuatro casos posibles. Ejemplo real: XGBoost, predicciones OOF con su umbral (0,358), sobre las 175.341 filas del train:
 
 |  | Predijo normal | Predijo ataque |
 |---|---|---|
-| **Era normal** (56.000) | **TN** = 51.753 (bien) | **FP** = 4.247 (falsa alarma) |
-| **Era ataque** (119.341) | **FN** = 2.684 (ataque no detectado) | **TP** = 116.657 (bien) |
+| **Era normal** (56.000) | **TN** = 51.501 (bien) | **FP** = 4.499 (falsa alarma) |
+| **Era ataque** (119.341) | **FN** = 3.072 (ataque no detectado) | **TP** = 116.269 (bien) |
 
 ### Las fórmulas, con esos números
 
 | Métrica | Pregunta que responde | Fórmula | Valor |
 |---|---|---|---|
-| **Recall** | De todos los ataques, ¿cuántos detectó? | TP / (TP + FN) = 116.657 / 119.341 | **0,978** |
-| **Precisión** | De lo que marcó como ataque, ¿cuánto era ataque? | TP / (TP + FP) = 116.657 / 120.904 | **0,965** |
-| **FPR** (tasa de falsos positivos) | De todo el tráfico normal, ¿cuánto marcó como ataque por error? | FP / (FP + TN) = 4.247 / 56.000 | **0,076** |
-| **F1** | Equilibrio entre precisión y recall | 2 × P × R / (P + R) | **0,971** |
-| **Accuracy** | ¿Cuántas acertó en total? | (TP + TN) / total | 0,960 |
+| **Recall** | De todos los ataques, ¿cuántos detectó? | TP / (TP + FN) = 116.269 / 119.341 | **0,974** |
+| **Precisión** | De lo que marcó como ataque, ¿cuánto era ataque? | TP / (TP + FP) = 116.269 / 120.768 | **0,963** |
+| **FPR** (tasa de falsos positivos) | De todo el tráfico normal, ¿cuánto marcó como ataque por error? | FP / (FP + TN) = 4.499 / 56.000 | **0,080** |
+| **F1** | Equilibrio entre precisión y recall | 2 × P × R / (P + R) | **0,968** |
+| **Accuracy** | ¿Cuántas acertó en total? | (TP + TN) / total | 0,957 |
 
 **Por qué no usamos accuracy como métrica principal:** con clases desbalanceadas engaña. Un modelo que dijera siempre "ataque" tendría 68 % de accuracy sin detectar nada útil.
 
@@ -191,26 +193,27 @@ Se calcula precisión, recall y F1 **para cada clase** por separado (cada clase 
 
 ## 8. Resultados: tarea binaria
 
-Cross-validation de 5 folds sobre el train (media ± desviación estándar), umbral 0,5:
+Cross-validation agrupada de 5 folds sobre el train (media ± desviación estándar), umbral 0,5:
 
 | Modelo | F1 | Recall | Precisión | FPR | ROC-AUC |
 |---|---|---|---|---|---|
-| Regla `dpkts == 0` | 0,762 ± 0,002 | 0,650 | 0,921 | 0,119 | 0,766 |
-| Regresión logística | 0,951 ± 0,001 | 0,952 | 0,949 | 0,108 | 0,984 |
-| **XGBoost** | **0,967 ± 0,001** | **0,957** | **0,978** | **0,046** | **0,994** |
+| Regla `dpkts == 0` | 0,762 ± 0,003 | 0,650 | 0,921 | 0,119 | 0,766 |
+| Regresión logística | 0,950 ± 0,001 | 0,952 | 0,949 | 0,109 | 0,984 |
+| **XGBoost** | **0,965 ± 0,001** | **0,955** | **0,976** | **0,050** | **0,993** |
 
 Con el umbral elegido en OOF:
 
 | Modelo | Umbral | Recall | FPR | F1 |
 |---|---|---|---|---|
-| Regresión logística | 0,368 | 0,982 | 0,161 | 0,954 |
-| XGBoost | 0,347 | 0,978 | 0,076 | 0,971 |
+| Regresión logística | 0,367 | 0,982 | 0,162 | 0,954 |
+| XGBoost | 0,358 | 0,974 | 0,080 | 0,968 |
 
 **Qué significan:**
 - **La regla sin IA** detecta solo el 65 % de los ataques: deja pasar uno de cada tres.
 - **La regresión logística** detecta el 95 %, pero con su umbral llega a 16 % de falsos positivos, más que la regla. Al ser lineal, para detectar más tiene que aceptar muchas más falsas alarmas.
-- **XGBoost** detecta el 97,8 % de los ataques con 7,6 % de falsos positivos. **Cumple el criterio del Charter.** La diferencia con la logística es la ventaja de un modelo no lineal: combina condiciones que una frontera recta no puede representar.
+- **XGBoost** detecta el 97,4 % de los ataques con 8,0 % de falsos positivos. **Cumple el criterio del Charter.** La diferencia con la logística es la ventaja de un modelo no lineal: combina condiciones que una frontera recta no puede representar.
 - Las desviaciones estándar son muy chicas (≈ 0,001): los modelos son **estables** (baja varianza, deck 09).
+- Con la validación agrupada, XGBoost bajó un poco respecto de la versión anterior (F1 de 0,967 a 0,965, FPR de 4,6 % a 5,0 %): esa diferencia era lo que inflaba la memorización de filas repetidas. Es chica, así que el modelo no dependía mucho de memorizar.
 
 ---
 
@@ -219,29 +222,30 @@ Con el umbral elegido en OOF:
 | Modelo | Macro-F1 | Weighted-F1 | Balanced accuracy |
 |---|---|---|---|
 | Clase mayoritaria | 0,048 ± 0,000 | 0,155 | 0,100 |
-| Regresión logística | 0,406 ± 0,003 | 0,715 | 0,576 |
-| **XGBoost** | **0,602 ± 0,005** | **0,799** | **0,661** |
+| Regresión logística | 0,412 ± 0,005 | 0,716 | 0,585 |
+| **XGBoost** | **0,620 ± 0,008** | **0,803** | **0,700** |
 
-**Cumple el criterio:** XGBoost supera a los dos baselines y la diferencia con la logística (≈ 0,20) es unas 40 veces la desviación estándar.
+**Cumple el criterio:** XGBoost supera a los dos baselines y la diferencia con la logística (≈ 0,21) es unas 25 veces la desviación estándar.
 
 F1 por clase (promedio de los 5 folds):
 
 | Clase | Filas por fold | Regresión logística | XGBoost |
 |---|---|---|---|
-| Generic | 8.000 | 0,987 | 0,990 |
-| Normal | 11.200 | 0,885 | 0,915 |
-| Reconnaissance | 2.098 | 0,350 | 0,826 |
-| Fuzzers | 3.636 | 0,612 | 0,756 |
-| Shellcode | 227 | 0,179 | 0,693 |
-| Worms | 26 | 0,036 | 0,685 |
-| Exploits | 6.679 | 0,526 | 0,651 |
-| DoS | 2.453 | 0,278 | 0,318 |
-| Analysis | 400 | 0,137 | 0,115 |
-| Backdoor | 350 | 0,068 | 0,068 |
+| Generic | 8.000 | 0,986 | 0,990 |
+| Normal | 11.200 | 0,884 | 0,912 |
+| Reconnaissance | 2.098 | 0,352 | 0,827 |
+| Fuzzers | 3.636 | 0,608 | 0,750 |
+| Shellcode | 227 | 0,180 | 0,702 |
+| Worms | 26 | 0,035 | 0,680 |
+| Exploits | 6.679 | 0,527 | 0,652 |
+| DoS | 2.453 | 0,297 | 0,379 |
+| Analysis | 400 | 0,163 | 0,184 |
+| Backdoor | 350 | 0,084 | 0,121 |
 
 **Qué significan:**
 - XGBoost reconoce bien incluso clases muy chicas como Worms y Shellcode, gracias a los pesos por clase.
 - **Analysis, Backdoor y DoS quedan muy bajas en los dos modelos.** No es una falla del modelo: en el dataset, muchas de esas filas tienen **exactamente los mismos valores** que filas de otras categorías (sobre todo Exploits). Si dos flujos son idénticos en las 42 variables, ningún modelo puede saber cuál es cuál.
+- Con la validación agrupada, Analysis, DoS y Backdoor **mejoraron** (de 0,12 a 0,18, de 0,32 a 0,38 y de 0,07 a 0,12). Lo más probable es que antes el modelo memorizara la etiqueta más frecuente de cada fila repetida (casi siempre Exploits) y fallara en validación con las repeticiones que tenían la etiqueta de una clase chica.
 - El recall de Normal baja a 0,85 en la multiclase: al darle mucho peso a las clases chicas, el modelo "se arriesga" más con las grandes. Es el costo esperable de balancear.
 
 ---
@@ -252,7 +256,7 @@ F1 por clase (promedio de los 5 folds):
 |---|---|---|
 | **Registros iguales con distinta etiqueta** | 17 % de las filas del train tienen las mismas 42 variables que otra fila de otra categoría | Calculamos que, para un único modelo, el Macro-F1 máximo posible en el train ronda 0,81. Por eso el criterio multiclase es relativo y no un número fijo. |
 | **Variables de TTL** | `sttl`, `dttl`, `ct_state_ttl` separan casi solas normal de ataque, por cómo se generó el tráfico en el laboratorio | No es data leakage (el TTL existe en una red real), es un sesgo del dataset. Las dejamos y lo documentamos. |
-| **Duplicados** | 38 % de las filas del train están repetidas | No las eliminamos: son flujos reales repetidos, no errores. La CV puede salir algo optimista por esto. |
+| **Duplicados** | 38 % de las filas del train están repetidas | No las eliminamos: son flujos reales repetidos, no errores. Para que no inflen la validación, la CV agrupa las repeticiones en el mismo fold (recomendación de la cátedra). |
 | **Outliers** | Entre 9 % y 16 % de valores atípicos por IQR en las variables de tamaño y duración | Son legítimos (cola larga del tráfico). No se tocan. |
 | **Split no estratificado** | 68 % de ataques en train y 55 % en test | Es el benchmark oficial, no lo cambiamos. Estratificamos los folds de la CV. |
 
@@ -262,19 +266,21 @@ F1 por clase (promedio de los 5 folds):
 
 | Tarea | Cuándo |
 |---|---|
-| Reunión de feedback con el profe | 28/10 |
-| Aplicar el feedback | semana 5 |
+| Figuras de la cross-validation (matriz de confusión y curva ROC) | semana 6 |
 | Congelar modelos y **evaluar en el test una sola vez** (`evaluate.py`) | semana 6 |
-| Script de predicción por consola (`inference.py`) | semana 6 |
 | README final, reproducción desde cero, preparación de la defensa | semana 7 |
+
+El feedback del profe ya está aplicado y el script de predicción por consola (`inference.py`) ya está hecho.
 
 ---
 
-## 12. Preguntas para la reunión con el profe
+## 12. Feedback de la cátedra
 
-1. **Duplicados:** el teórico dice eliminarlos, pero son el 38 % y son flujos reales. ¿Está bien conservarlos con la justificación que pusimos?
-2. **One-hot sobre `proto` (133 valores):** ¿le parece aceptable con la agrupación de categorías raras, o prefiere otra codificación?
-3. **Criterio multiclase:** por el techo de Macro-F1 de ≈ 0,81, planteamos "superar a los baselines" en vez de un número fijo. ¿Es válido?
-4. **Variables de TTL:** ¿quiere que hagamos también la comparación sin ellas?
-5. **Umbral:** la regla "mejor F1 con recall ≥ 0,90" favorece el recall porque la mayoría de los registros son ataques. ¿Prefiere "menor tasa de falsos positivos con recall ≥ 0,90"?
-6. **Alcance:** ¿alcanza un script de consola para la predicción?
+Le consultamos por mail tres decisiones: los duplicados, el criterio multiclase y la regla del umbral. Nos respondió que el proyecto va bien encaminado, con un punto a corregir: con el 38 % de filas duplicadas y un `StratifiedKFold` común, las mismas filas caían a la vez en entrenamiento y validación, y en XGBoost eso infla las métricas por memorización. Recomendó agrupar las filas idénticas con `StratifiedGroupKFold` o eliminar los duplicados.
+
+Elegimos agrupar, porque mantiene la distribución real del dataset, que era el motivo para no eliminar los duplicados. Los resultados de las secciones 8 y 9 ya están calculados con la validación agrupada.
+
+Preguntas que no hicimos y conviene tener preparadas para la defensa (las respuestas están en el Charter):
+- **One-hot sobre `proto` (133 valores):** con la agrupación de categorías raras quedan 188 columnas para 175.341 filas. Hashing tiene colisiones y target encoding tiene riesgo de sobreajuste.
+- **Variables de TTL:** son un sesgo del dataset, no data leakage. La comparación sin ellas es un extra opcional.
+- **Alcance:** la consigna acepta un script de consola como MVP.
