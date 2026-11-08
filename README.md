@@ -77,7 +77,7 @@ reports/figures/   matrices de confusión y curvas ROC (*_test_* son del test)
 
 ## Instalación y uso
 
-Probado con Python 3.13.
+Probado con Python 3.13. El proyecto no usa variables de entorno ni credenciales, así que no hace falta un archivo `.env`. Los datos y los modelos entrenados no están en el repositorio: los datos se descargan según [data/README.md](data/README.md) y los modelos se generan con `train.py`.
 
 ```bash
 # Crear el entorno e instalar dependencias
@@ -104,7 +104,7 @@ Cada corrida de `train.py` imprime las métricas de cada fold y su promedio, gua
 
 `evaluate.py` no entrena nada: carga el modelo guardado y su umbral, y calcula las métricas sobre el test. Si el JSON de ese modelo ya existe, se niega a correr, para que el test no se evalúe dos veces sin querer. Con `--split train` se puede probar el script sin tocar el test.
 
-Para reproducir todo desde cero hay que correr `train.py` y después `evaluate.py` con cada modelo (heuristic, lr y xgb) en las dos tareas. Sobre la reproducibilidad entre distintas máquinas, ver la sección [Reproducibilidad](#reproducibilidad).
+Para reproducir todo desde cero hay que correr `train.py` y después `evaluate.py` con cada modelo (heuristic, lr y xgb) en las dos tareas. Como las métricas del test ya están en el repositorio, antes de volver a evaluar hay que borrar los `reports/metrics/*_test.json`; si no, `evaluate.py` se niega a correr. Sobre la reproducibilidad entre distintas máquinas, ver la sección [Reproducibilidad](#reproducibilidad).
 
 ## Resultados
 
