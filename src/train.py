@@ -12,13 +12,14 @@ from sklearn.preprocessing import LabelEncoder
 
 import joblib
 
-from src.config import METRICS_DIR, MODELS_DIR
+from src.config import FIGURES_DIR, METRICS_DIR, MODELS_DIR
 from src.metrics import select_binary_threshold
 from src.baselines import make_baseline
 from src.config import LR_PARAMS, SEED, XGB_PARAMS
 from src.data import get_X_y, load_split
 from src.features import build_preprocessor
 from src.metrics import compute_metrics
+from src.plots import save_confusion_matrix, save_roc_curve
 
 N_FOLDS = 5
 
@@ -71,6 +72,7 @@ def cross_validate(task: str, model: str):
 
     fold_metrics = []
     oof_scores = np.zeros(len(y))     # probabilidad de ataque para cada fila (binaria)
+    oof_labels = np.full(len(y), -1, dtype=int)
 
     for k, (train_idx, val_idx) in enumerate(sgkf.split(X, y, groups), start=1):
         
@@ -83,6 +85,7 @@ def cross_validate(task: str, model: str):
 
 
         y_pred = clf.predict(X_val)
+        oof_labels[val_idx] = y_pred
         y_score = clf.predict_proba(X_val)[:, 1] if task == "binary" else None
         if task == "binary":
             oof_scores[val_idx] = y_score
@@ -96,7 +99,7 @@ def cross_validate(task: str, model: str):
                                 labels=encoder.classes_)
             print(f"fold {k}: macro_f1={m['macro_f1']:.3f}  weighted_f1={m['weighted_f1']:.3f}")
         fold_metrics.append(m)
-    return fold_metrics, oof_scores, y, encoder
+    return fold_metrics, oof_scores, oof_labels, y, encoder
 
 
 
@@ -108,7 +111,7 @@ SUMMARY_KEYS = {
 
 def run(task: str, model: str) -> None:
     print(f"\n=== {task} / {model} ===")
-    fold_metrics, oof_scores, y, encoder = cross_validate(task, model)
+    fold_metrics, oof_scores, oof_labels, y, encoder = cross_validate(task, model)
 
     # 1. Media ± desviación estándar de cada métrica en los 5 folds
     summary = {}
@@ -126,6 +129,29 @@ def run(task: str, model: str) -> None:
         oof_at_threshold = compute_metrics("binary", y, oof_pred, y_score=oof_scores)
         print(f"  umbral OOF = {threshold:.4f} -> recall {oof_at_threshold['recall']:.4f}, "
               f"fpr {oof_at_threshold['fpr']:.4f}, f1 {oof_at_threshold['f1']:.4f}")
+
+    if model != "heuristic":
+        FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+        if task == "binary":
+            plot_threshold = threshold if threshold is not None else 0.5
+            oof_pred = (oof_scores >= plot_threshold).astype(int)
+            save_confusion_matrix(
+                y, oof_pred, FIGURES_DIR / f"{task}_{model}_cm.png",
+                f"Matriz de confusión OOF — {model} (umbral {plot_threshold:.3f})",
+                labels=["Normal", "Ataque"],
+            )
+            save_roc_curve(
+                y, oof_scores, FIGURES_DIR / f"{task}_{model}_roc.png",
+                f"Curva ROC OOF — {model}",
+            )
+        else:
+            y_true_names = encoder.inverse_transform(np.asarray(y, dtype=int))
+            y_pred_names = encoder.inverse_transform(oof_labels)
+            class_names = [str(name) for name in encoder.classes_]
+            save_confusion_matrix(
+                y_true_names, y_pred_names, FIGURES_DIR / f"{task}_{model}_cm.png",
+                f"Matriz de confusión OOF — {model}", labels=class_names,
+            )
 
     # 3. Modelo final: se entrena con TODO el train
     X_full, y_full, encoder = load_xy(task)
@@ -150,4 +176,3 @@ if __name__ == "__main__":
     parser.add_argument("--model", choices=["heuristic", "lr", "xgb"], required=True)
     args = parser.parse_args()
     run(args.task, args.model)
-
