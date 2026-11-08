@@ -40,6 +40,8 @@ def save_confusion_matrix(
     fig, ax = plt.subplots(figsize=figsize)
     display.plot(ax=ax, cmap="Blues", colorbar=False, values_format="d")
     ax.set_title(title)
+    ax.set_xlabel("Predicción")
+    ax.set_ylabel("Valor real")
     if labels is not None and len(labels) > 5:
         ax.tick_params(axis="x", labelrotation=45, labelsize=9)
         ax.tick_params(axis="y", labelsize=9)

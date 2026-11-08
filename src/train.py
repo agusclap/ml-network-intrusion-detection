@@ -130,27 +130,28 @@ def run(task: str, model: str) -> None:
         print(f"  umbral OOF = {threshold:.4f} -> recall {oof_at_threshold['recall']:.4f}, "
               f"fpr {oof_at_threshold['fpr']:.4f}, f1 {oof_at_threshold['f1']:.4f}")
 
-    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-    if task == "binary":
-        plot_threshold = threshold if threshold is not None else 0.5
-        oof_pred = (oof_scores >= plot_threshold).astype(int)
-        save_confusion_matrix(
-            y, oof_pred, FIGURES_DIR / f"{task}_{model}_cm.png",
-            f"Matriz de confusión OOF — {model} (umbral {plot_threshold:.3f})",
-            labels=["Normal", "Ataque"],
-        )
-        save_roc_curve(
-            y, oof_scores, FIGURES_DIR / f"{task}_{model}_roc.png",
-            f"Curva ROC OOF — {model}",
-        )
-    else:
-        y_true_names = encoder.inverse_transform(np.asarray(y, dtype=int))
-        y_pred_names = encoder.inverse_transform(oof_labels)
-        class_names = [str(name) for name in encoder.classes_]
-        save_confusion_matrix(
-            y_true_names, y_pred_names, FIGURES_DIR / f"{task}_{model}_cm.png",
-            f"Matriz de confusión OOF — {model}", labels=class_names,
-        )
+    if model != "heuristic":
+        FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+        if task == "binary":
+            plot_threshold = threshold if threshold is not None else 0.5
+            oof_pred = (oof_scores >= plot_threshold).astype(int)
+            save_confusion_matrix(
+                y, oof_pred, FIGURES_DIR / f"{task}_{model}_cm.png",
+                f"Matriz de confusión OOF — {model} (umbral {plot_threshold:.3f})",
+                labels=["Normal", "Ataque"],
+            )
+            save_roc_curve(
+                y, oof_scores, FIGURES_DIR / f"{task}_{model}_roc.png",
+                f"Curva ROC OOF — {model}",
+            )
+        else:
+            y_true_names = encoder.inverse_transform(np.asarray(y, dtype=int))
+            y_pred_names = encoder.inverse_transform(oof_labels)
+            class_names = [str(name) for name in encoder.classes_]
+            save_confusion_matrix(
+                y_true_names, y_pred_names, FIGURES_DIR / f"{task}_{model}_cm.png",
+                f"Matriz de confusión OOF — {model}", labels=class_names,
+            )
 
     # 3. Modelo final: se entrena con TODO el train
     X_full, y_full, encoder = load_xy(task)
