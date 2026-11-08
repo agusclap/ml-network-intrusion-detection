@@ -1,6 +1,6 @@
 # Resumen del proyecto: detección de intrusiones con Machine Learning
 
-Documento de estudio para entender el proyecto completo: qué buscamos, cómo está armado, qué resultados tenemos, qué significan y cómo se calculan. Estado al 2/11/2026.
+Documento de estudio para entender el proyecto completo: qué buscamos, cómo está armado, qué resultados tenemos, qué significan y cómo se calculan. Estado al 8/11/2026.
 
 ---
 
@@ -17,7 +17,7 @@ Tenemos dos tareas sobre los mismos datos:
 
 **Criterios de éxito** (definidos en el Charter antes de entrenar):
 - Binaria: detectar al menos el 90 % de los ataques (recall ≥ 0,90) **sin tener más falsos positivos que la regla sin IA**, y tener mejor F1 que los baselines.
-- Multiclase: superar a los baselines en Macro-F1, con una diferencia mayor que la variación entre folds. No ponemos un número fijo porque el dataset tiene un techo (sección 10).
+- Multiclase: superar a los baselines en Macro-F1, con una diferencia mayor que la variación entre folds. No ponemos un número fijo porque el dataset tiene un techo (sección 11).
 
 ---
 
@@ -150,7 +150,7 @@ Elegimos el umbral **con las predicciones OOF**: probamos todos los umbrales pos
 
 ### Modelo final y test
 
-Los 5 modelos de la CV solo sirven para **medir**. El modelo que se guarda se entrena con el 100 % del train. El **test todavía no se tocó**: se va a evaluar una sola vez, cuando los modelos estén congelados. Si usáramos el test para elegir algo, terminaríamos optimizando para ese conjunto (deck 09).
+Los 5 modelos de la CV solo sirven para **medir**. El modelo que se guarda se entrena con el 100 % del train. El **test se evaluó una sola vez**, con los modelos ya congelados (ver sección 10). Si usáramos el test para elegir algo, terminaríamos optimizando para ese conjunto (deck 09).
 
 ---
 
@@ -250,37 +250,84 @@ F1 por clase (promedio de los 5 folds):
 
 ---
 
-## 10. Limitaciones del dataset (lo que hay que poder explicar)
+## 10. Resultados en el test
+
+Cada modelo se evaluó **una sola vez** con `evaluate.py`, usando el modelo guardado y el umbral elegido en el train. Después no se cambió nada.
+
+**Binaria:**
+
+| Modelo | Recall | FPR | Precisión | F1 | ROC-AUC |
+|---|---|---|---|---|---|
+| Regla `dpkts == 0` | 0,658 | 0,167 | 0,828 | 0,733 | 0,745 |
+| Regresión logística (umbral 0,367) | 0,964 | 0,372 | 0,761 | 0,850 | 0,956 |
+| **XGBoost** (umbral 0,358) | **0,983** | 0,251 | **0,828** | **0,898** | **0,984** |
+
+Matriz de XGBoost: TN 27.717 · FP 9.283 · FN 788 · TP 44.544.
+
+**Multiclase:** Macro-F1 de 0,524 en XGBoost, contra 0,352 de la logística y 0,062 de la clase mayoritaria.
+
+**Criterios del Charter:**
+
+| Criterio | Test | ¿Cumple? |
+|---|---|---|
+| Recall ≥ 0,90 | 0,983 | Sí |
+| FPR ≤ la de la regla (0,167) | 0,251 | **No** |
+| F1 mejor que los dos baselines | 0,898 | Sí |
+| Multiclase: mantener la ventaja en Macro-F1 | 0,524 | Sí |
+
+**Por qué sube la FPR (de 0,080 en la CV a 0,251 en el test):**
+
+| `sttl` | Normales en train | Ataques en train | Normales en test |
+|---|---|---|---|
+| 31 | 70,5 % | 0 % | 45,1 % |
+| 254 | 20,1 % | 86,7 % | 40,7 % |
+
+- En el train, `sttl = 254` es casi siempre ataque, así que el modelo lo aprendió como atajo (el sesgo del TTL).
+- En el test se duplica el tráfico normal con `sttl = 254`. De los 9.283 falsos positivos, 8.099 (87 %) tienen ese valor; los normales con `sttl = 31` no dan ninguna falsa alarma.
+- La regla sin IA también empeora (FPR de 0,119 a 0,167): el tráfico normal del test es distinto al del train, no es solo nuestro modelo.
+- El modelo multiclase clasifica 7.402 de esas falsas alarmas como Fuzzers. Por eso baja Normal y la precisión de Fuzzers es 0,26.
+- El AUC sigue en 0,984: el modelo ordena bien los flujos, lo que falla es el umbral elegido con el train, porque cambió la distribución.
+
+**Qué decir en la defensa:** no cambiamos el umbral después de ver el test porque eso sería ajustar el modelo al test. El criterio se fijó antes, se reporta como no cumplido y se explica la causa, que ya habíamos anotado como riesgo. Para usarlo en otra red habría que volver a elegir el umbral con tráfico de esa red o entrenar sin las variables de TTL.
+
+**Reproducibilidad:** en la misma máquina todo da idéntico. En la de Lautaro (Linux, 8 núcleos) los datos y los folds dan iguales, pero los modelos cambian en el tercer decimal por diferencias de redondeo del procesador. El umbral de XGBoost le da 0,346 en vez de 0,358, con recall 0,976 y FPR 0,084 en la CV: las conclusiones no cambian.
+
+---
+
+## 11. Limitaciones del dataset (lo que hay que poder explicar)
 
 | Limitación | Qué es | Qué hicimos |
 |---|---|---|
 | **Registros iguales con distinta etiqueta** | 17 % de las filas del train tienen las mismas 42 variables que otra fila de otra categoría | Calculamos que, para un único modelo, el Macro-F1 máximo posible en el train ronda 0,81. Por eso el criterio multiclase es relativo y no un número fijo. |
-| **Variables de TTL** | `sttl`, `dttl`, `ct_state_ttl` separan casi solas normal de ataque, por cómo se generó el tráfico en el laboratorio | No es data leakage (el TTL existe en una red real), es un sesgo del dataset. Las dejamos y lo documentamos. |
+| **Variables de TTL** | `sttl`, `dttl`, `ct_state_ttl` separan casi solas normal de ataque, por cómo se generó el tráfico en el laboratorio | No es data leakage (el TTL existe en una red real), es un sesgo del dataset. Las dejamos y lo documentamos. En el test se ve su costo: es la causa de la mayoría de los falsos positivos (sección 10). |
 | **Duplicados** | 38 % de las filas del train están repetidas | No las eliminamos: son flujos reales repetidos, no errores. Para que no inflen la validación, la CV agrupa las repeticiones en el mismo fold (recomendación de la cátedra). |
 | **Outliers** | Entre 9 % y 16 % de valores atípicos por IQR en las variables de tamaño y duración | Son legítimos (cola larga del tráfico). No se tocan. |
 | **Split no estratificado** | 68 % de ataques en train y 55 % en test | Es el benchmark oficial, no lo cambiamos. Estratificamos los folds de la CV. |
 
 ---
 
-## 11. Qué falta
+## 12. Qué falta
 
 | Tarea | Cuándo |
 |---|---|
-| Figuras de la cross-validation (matriz de confusión y curva ROC) | semana 6 |
-| Congelar modelos y **evaluar en el test una sola vez** (`evaluate.py`) | semana 6 |
-| README final, reproducción desde cero, preparación de la defensa | semana 7 |
+| Notebook con el análisis de los errores del test (`02_analisis_test.ipynb`) | 9/11 |
+| Actualizar el Issue #1 con el Charter final | 9/11 |
+| Presentación y demo de `inference.py` | 10/11 – 11/11 |
+| Ensayo de la defensa | 12/11 |
 
-El feedback del profe ya está aplicado y el script de predicción por consola (`inference.py`) ya está hecho.
+Entrega: viernes 13/11.
 
 ---
 
-## 12. Feedback de la cátedra
+## 13. Feedback de la cátedra
 
 Le consultamos por mail tres decisiones: los duplicados, el criterio multiclase y la regla del umbral. Nos respondió que el proyecto va bien encaminado, con un punto a corregir: con el 38 % de filas duplicadas y un `StratifiedKFold` común, las mismas filas caían a la vez en entrenamiento y validación, y en XGBoost eso infla las métricas por memorización. Recomendó agrupar las filas idénticas con `StratifiedGroupKFold` o eliminar los duplicados.
 
 Elegimos agrupar, porque mantiene la distribución real del dataset, que era el motivo para no eliminar los duplicados. Los resultados de las secciones 8 y 9 ya están calculados con la validación agrupada.
 
+Ese feedback contó como la revisión (review) que pide la consigna para la modalidad grupal.
+
 Preguntas que no hicimos y conviene tener preparadas para la defensa (las respuestas están en el Charter):
 - **One-hot sobre `proto` (133 valores):** con la agrupación de categorías raras quedan 188 columnas para 175.341 filas. Hashing tiene colisiones y target encoding tiene riesgo de sobreajuste.
-- **Variables de TTL:** son un sesgo del dataset, no data leakage. La comparación sin ellas es un extra opcional.
+- **Variables de TTL:** son un sesgo del dataset, no data leakage. En el test explican la mayoría de los falsos positivos (sección 10).
 - **Alcance:** la consigna acepta un script de consola como MVP.
