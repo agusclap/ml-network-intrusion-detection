@@ -6,7 +6,7 @@ Inteligencia Artificial - Ingeniería en Informática - UNDEF CRUC IUA
 - **Modalidad:** Grupal
 - **Integrantes:** Maximo Agustin Rodeyro y Lautaro Niccolini
 - **Categorías:** Machine Learning Predictivo y Data Engineering & IA
-- **Fecha:** 29/9/2026
+- **Fecha:** 29/9/2026 (actualizado el 8/11/2026 con los resultados, ver sección 10)
 
 ## 1. Resumen
 
@@ -61,7 +61,7 @@ Cuando revisamos los datos encontramos varias cosas a tener en cuenta:
 - **No hay valores faltantes.** Algunos valores de `state` aparecen solo en el test, así que el encoding de las variables categóricas tiene que soportar categorías que no vio en el entrenamiento.
 - **Desbalance.** En el train el 68 % de los registros son ataques, y en el test el 55 %. Entre las categorías de ataque la diferencia es mucho más grande: Generic tiene 40.000 registros y Worms solo 130. Para manejarlo usamos pesos por clase en los modelos y métricas que no se engañan con el desbalance (F1 por clase, Macro-F1, PR-AUC). No vamos a generar datos sintéticos.
 - **Registros iguales con distinta etiqueta.** Cerca del 17 % de las filas del train tiene exactamente los mismos valores en las 42 variables que otra fila con otra categoría de ataque. Pasa sobre todo entre Analysis, Backdoor, DoS y Exploits. Esto hace que ningún modelo pueda separar perfectamente esas clases: calculamos que el Macro-F1 máximo posible en el train ronda 0,81. Por eso no ponemos un valor fijo de Macro-F1 como objetivo.
-- **Variables de TTL.** `sttl`, `dttl` y `ct_state_ttl` separan casi solas el tráfico normal de los ataques, por cómo se generó el tráfico en el laboratorio. No se trata de data leakage porque el TTL es un dato que también está disponible en una red real, pero sí es un sesgo del dataset. Las dejamos en el modelo y lo mencionamos como limitación.
+- **Variables de TTL.** `sttl`, `dttl` y `ct_state_ttl` separan casi solas el tráfico normal de los ataques, por cómo se generó el tráfico en el laboratorio. No se trata de data leakage porque el TTL es un dato que también está disponible en una red real, pero sí es un sesgo del dataset. Las dejamos en el modelo y lo mencionamos como limitación. En el test se vio el costo de esta decisión: es la causa de la mayoría de los falsos positivos (sección 10).
 - **Duplicados dentro del train.** El 38 % de las filas del train está repetida (mismos valores en todas las columnas salvo `id`). No las eliminamos: no son errores de carga sino flujos de red reales que se repiten (por ejemplo, muchas conexiones cortas idénticas durante un escaneo), y sacarlas cambiaría la proporción real de cada tipo de tráfico en el benchmark. Para que esto no infle la validación, la cross-validation agrupa las filas idénticas y manda todas sus repeticiones al mismo fold (ver "Validación").
 - **Duplicados entre train y test.** Alrededor del 5 % de las filas del test también aparecen en el train. Evaluamos sobre el test completo porque es el benchmark oficial, y lo mencionamos como limitación.
 - **Outliers.** Varias variables numéricas tienen valores muy extremos (por ejemplo, en el train `sbytes` llega a casi 13 MB cuando la mediana es de 430 bytes). Los analizamos en el EDA, pero no los eliminamos ni los recortamos: en tráfico de red son valores legítimos (una descarga grande, un flujo largo) y muchas veces son justamente la señal de un ataque. XGBoost no se ve afectado por ellos, y para la regresión logística se estandarizan.
@@ -174,6 +174,91 @@ Si terminamos esto con tiempo de sobra, las posibles mejoras son: probar algunas
 
 Si alguna semana no podemos avanzar por parciales, usamos la semana 7 y la holgura de las semanas 3 a 5 para recuperar. Si nos atrasamos, simplificamos la presentación (por ejemplo, un análisis exploratorio con menos gráficos), pero no sacamos los baselines, la validación, la evaluación en el test, el script de predicción ni el README.
 
+**Estado al 8/11/2026:** las semanas 1 a 6 están terminadas. Queda la semana 7 para la documentación final y la preparación de la defensa. La entrega es el viernes 13/11.
+
 ## 9. Por qué elegimos este proyecto
 
 También consideramos mantenimiento predictivo, detección de fraude, análisis de conducción y un sistema con agentes basado en LLMs. Nos quedamos con este porque combina dos de las categorías que propone la consigna del trabajo integrador, el dataset es público y conocido, se puede armar un baseline sin IA con sentido y el alcance es razonable para dos personas en el tiempo que tenemos. Además, los problemas que encontramos en el dataset (clases que se superponen, el sesgo del TTL, las diferencias entre train y test) nos dan bastante para analizar y discutir en la defensa.
+
+## 10. Resultados
+
+Todo lo de la sección 5 está entregado. El código, las métricas en JSON y las figuras están en el repositorio, y el detalle está en el README.
+
+### Cross-validation sobre el train
+
+5 folds con `StratifiedGroupKFold`, media ± desviación estándar entre folds.
+
+**Binaria**, con el umbral elegido con las predicciones out-of-fold:
+
+| Modelo | Umbral | Recall | Tasa de falsos positivos | F1 |
+|---|---|---|---|---|
+| Regla `dpkts == 0` | - | 0,650 | 0,119 | 0,762 |
+| Regresión logística | 0,367 | 0,982 | 0,162 | 0,954 |
+| XGBoost | 0,358 | 0,974 | 0,080 | 0,968 |
+
+**Multiclase:**
+
+| Modelo | Macro-F1 |
+|---|---|
+| Clase mayoritaria | 0,048 ± 0,000 |
+| Regresión logística | 0,412 ± 0,005 |
+| XGBoost | 0,620 ± 0,008 |
+
+En la cross-validation, XGBoost cumplía los dos criterios.
+
+### Evaluación final sobre el test
+
+Cada modelo se evaluó una sola vez, con el modelo entrenado en todo el train y el umbral elegido en la cross-validation. Después no se cambió nada.
+
+**Binaria:**
+
+| Modelo | Recall | Tasa de falsos positivos | Precisión | F1 | ROC-AUC |
+|---|---|---|---|---|---|
+| Regla `dpkts == 0` | 0,658 | 0,167 | 0,828 | 0,733 | 0,745 |
+| Regresión logística | 0,964 | 0,372 | 0,761 | 0,850 | 0,956 |
+| **XGBoost** | **0,983** | 0,251 | **0,828** | **0,898** | **0,984** |
+
+Matriz de confusión de XGBoost: 27.717 verdaderos negativos, 9.283 falsos positivos, 788 falsos negativos y 44.544 verdaderos positivos.
+
+**Multiclase:**
+
+| Modelo | Macro-F1 | Weighted-F1 | Exactitud balanceada |
+|---|---|---|---|
+| Clase mayoritaria | 0,062 | 0,279 | 0,100 |
+| Regresión logística | 0,352 | 0,685 | 0,548 |
+| **XGBoost** | **0,524** | **0,741** | **0,644** |
+
+### Criterios de éxito
+
+| Criterio (sección 4) | Resultado en el test | ¿Se cumple? |
+|---|---|---|
+| Binaria: recall de al menos 0,90 | 0,983 | Sí |
+| Binaria: tasa de falsos positivos no mayor que la de la regla sin IA (0,167) | 0,251 | **No** |
+| Binaria: mejor F1 que los dos baselines | 0,898 contra 0,733 y 0,850 | Sí |
+| Multiclase: ventaja en Macro-F1 sobre los dos baselines | 0,524 contra 0,062 y 0,352 | Sí |
+
+### Por qué no se cumple el criterio de falsos positivos
+
+La tasa de falsos positivos de XGBoost sube de 0,080 en la cross-validation a 0,251 en el test, y casi todo se explica por una variable, `sttl`:
+
+| `sttl` | Normales en train | Ataques en train | Normales en test |
+|---|---|---|---|
+| 31 | 70,5 % | 0 % | 45,1 % |
+| 254 | 20,1 % | 86,7 % | 40,7 % |
+
+- En el train, `sttl = 254` es casi siempre un ataque, y el modelo lo aprendió como señal. Es el sesgo del TTL que marcamos en la sección 3.
+- En el test, el tráfico normal con `sttl = 254` se duplica. De los 9.283 falsos positivos, 8.099 (87 %) tienen ese valor. Los normales con `sttl = 31` no generan ninguna falsa alarma.
+- La regla sin IA también empeora (de 0,119 a 0,167): el tráfico normal del test es distinto al del train, no es solo un problema de nuestro modelo.
+- El ROC-AUC sigue en 0,984: el modelo ordena bien los flujos. Lo que falla es el umbral elegido en el train, porque cambió la distribución.
+
+No cambiamos el umbral después de ver el test, porque eso sería ajustar el modelo al test y el resultado dejaría de ser una evaluación independiente. El análisis está en `notebooks/02_analisis_test.ipynb`. Para usar el modelo en otra red habría que volver a elegir el umbral con tráfico de esa red, o entrenar sin las variables de TTL.
+
+### Reproducibilidad
+
+En la misma máquina, volver a correr todo da exactamente los mismos números. En otra máquina (Linux con 8 núcleos, contra Windows con 20 núcleos) los datos y los folds salen idénticos, pero los modelos cambian en el tercer decimal por diferencias de redondeo del procesador. Eso mueve un poco el umbral de XGBoost (0,346 en vez de 0,358) sin cambiar las conclusiones.
+
+## 11. Cambios respecto a la primera versión
+
+- **Validación agrupada (2/11):** por recomendación de la cátedra, la cross-validation pasó de `StratifiedKFold` a `StratifiedGroupKFold`, para que las filas repetidas no queden en entrenamiento y validación a la vez (secciones 3 y 4).
+- **Métricas y umbral (2/11):** agregamos la justificación del recall y del umbral con los contenidos de clasificación (secciones 4 y 6).
+- **Resultados (8/11):** agregamos la sección 10 con la cross-validation, el test y el análisis de los falsos positivos.
