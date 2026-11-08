@@ -1,0 +1,33 @@
+{
+  "task": "binary",
+  "model": "heuristic",
+  "split": "test",
+  "threshold": null,
+  "metrics": {
+    "accuracy": 0.7362872273235194,
+    "recall": 0.6576590487955528,
+    "fpr": 0.16737837837837838,
+    "precision": 0.8280008887407654,
+    "f1": 0.7330644962993926,
+    "pr_auc": 0.7330352079507364,
+    "roc_auc": 0.7451403352085871,
+    "tn": 30807,
+    "fp": 6193,
+    "fn": 15519,
+    "tp": 29813,
+    "confusion_matrix": [
+      [
+        30807,
+        6193
+      ],
+      [
+        15519,
+        29813
+      ]
+    ],
+    "confusion_matrix_labels": [
+      0,
+      1
+    ]
+  }
+}
