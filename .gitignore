@@ -10,6 +10,13 @@
 data/*
 !data/README.md
 !data/.gitkeep
+# Estructura de la plantilla de la cátedra: carpetas vacías con .gitkeep
+!data/raw/
+data/raw/*
+!data/raw/.gitkeep
+!data/processed/
+data/processed/*
+!data/processed/.gitkeep
 
 # Por seguridad: ningún CSV ni ZIP fuera de data/ tampoco
 # (predicciones de la CLI, copias sueltas del dataset, descargas).

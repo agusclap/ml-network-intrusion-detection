@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detección de intrusiones con ML</title>
+  <meta name="description" content="Un detector de intrusiones en redes que clasifica flujos como tráfico normal o ataque, entrenado y evaluado sobre el dataset UNSW-NB15.">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+  <nav>
+    <div class="container">
+      <span class="brand">NIDS con Machine Learning</span>
+      <ul>
+        <li><a href="#sobre">Sobre</a></li>
+        <li><a href="#demo">Demo</a></li>
+        <li><a href="#resultados">Resultados</a></li>
+        <li><a href="#autores">Autores</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="container">
+      <h1>Detección de intrusiones en redes con Machine Learning</h1>
+      <p class="tagline">Un detector que clasifica flujos de red como tráfico normal o ataque, y el tipo de ataque, entrenado y evaluado sobre el dataset UNSW-NB15.</p>
+
+      <div class="badges">
+        <img src="https://img.shields.io/badge/python-3.13-blue.svg" alt="Python 3.13">
+        <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License">
+      </div>
+
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/agusclap/ml-network-intrusion-detection">Ver repositorio</a>
+        <a class="btn btn-secondary" href="https://github.com/agusclap/ml-network-intrusion-detection#readme">Leer el README</a>
+      </div>
+    </div>
+  </header>
+
+  <section id="demo">
+    <div class="container">
+      <h2>Demo</h2>
+      <p>El sistema se usa desde la consola: recibe un CSV con flujos de red y devuelve, para cada uno, la probabilidad de que sea un ataque y la etiqueta final. Esta es la salida real con los 20 flujos de ejemplo del repositorio.</p>
+      <div class="demo-media">
+        <img src="img/demo_inferencia.png" alt="Salida del script de inferencia clasificando 20 flujos de red">
+      </div>
+    </div>
+  </section>
+
+  <section id="sobre">
+    <div class="container">
+      <h2>Sobre el proyecto</h2>
+      <p>
+        Los sistemas de detección de intrusiones tradicionales funcionan con firmas: reglas escritas a mano para ataques que ya se conocen. Nosotros entrenamos un modelo que aprende cómo se comporta el tráfico malicioso a partir de ejemplos etiquetados. Para cada flujo de red (protocolo, servicio, duración, bytes y paquetes de cada lado, TTL, etc.) decide si es normal o un ataque, y además predice el tipo de ataque entre 9 categorías.
+      </p>
+      <p>
+        Usamos el dataset público UNSW-NB15 con su división oficial en train y test. Comparamos una regla sin IA y una regresión logística contra XGBoost, validamos con cross-validation agrupando las filas repetidas y evaluamos cada modelo una sola vez sobre el test.
+      </p>
+      <p>
+        XGBoost detecta el 98,3 % de los ataques del test. Su tasa de falsas alarmas, en cambio, sube del 8 % en la validación al 25 % en el test: casi todas vienen de un sesgo del dataset en la variable TTL, que analizamos y documentamos en lugar de ajustar el modelo al test.
+      </p>
+
+      <h3>Construido con</h3>
+      <div class="pills">
+        <span class="pill">Python</span>
+        <span class="pill">pandas</span>
+        <span class="pill">scikit-learn</span>
+        <span class="pill">XGBoost</span>
+        <span class="pill">matplotlib</span>
+        <span class="pill">Jupyter</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="resultados">
+    <div class="container">
+      <h2>Resultados</h2>
+      <p>Tarea binaria sobre el test oficial (82.332 flujos), con XGBoost y el umbral elegido en el entrenamiento. La regla sin IA detecta el 65,8 % de los ataques y tiene un F1 de 0,733.</p>
+
+      <div class="stats">
+        <div class="stat-card">
+          <div class="value">0,983</div>
+          <div class="label">Recall: ataques detectados</div>
+        </div>
+        <div class="stat-card">
+          <div class="value">0,898</div>
+          <div class="label">F1 (regla sin IA: 0,733)</div>
+        </div>
+        <div class="stat-card">
+          <div class="value">0,984</div>
+          <div class="label">ROC-AUC</div>
+        </div>
+      </div>
+
+      <div class="demo-media">
+        <img src="img/binary_xgb_test_cm.png" alt="Matriz de confusión de XGBoost en el test">
+      </div>
+      <div class="demo-media">
+        <img src="img/binary_xgb_test_roc.png" alt="Curva ROC de XGBoost en el test">
+      </div>
+      <p>En la tarea multiclase, XGBoost llega a un Macro-F1 de 0,524 en el test, contra 0,352 de la regresión logística y 0,062 de la clase mayoritaria.</p>
+      <div class="demo-media">
+        <img src="img/multiclass_xgb_test_cm.png" alt="Matriz de confusión multiclase de XGBoost en el test">
+      </div>
+    </div>
+  </section>
+
+  <section id="autores">
+    <div class="container">
+      <h2>Autores</h2>
+      <div class="authors">
+        <div class="author-card">
+          <div class="name">Maximo Agustin Rodeyro</div>
+          <div class="links">
+            <a href="https://github.com/agusclap">GitHub</a>
+          </div>
+        </div>
+        <div class="author-card">
+          <div class="name">Lautaro Niccolini</div>
+          <div class="links">
+            <a href="https://github.com/Lauti00">GitHub</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>
+        Trabajo final — Inteligencia Artificial · Universidad de la Defensa Nacional, CRUC IUA · 2026<br>
+        <a href="https://github.com/agusclap/ml-network-intrusion-detection">Código fuente en GitHub</a>
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>

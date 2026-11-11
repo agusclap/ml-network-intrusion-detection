@@ -1,0 +1,31 @@
+[project]
+name = "nids-unsw-nb15"
+version = "1.0.0"
+description = "Detección de intrusiones en redes con Machine Learning sobre UNSW-NB15: clasificación binaria y multiclase de flujos de red."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [
+    { name = "Maximo Agustin Rodeyro" },
+    { name = "Lautaro Niccolini" },
+]
+# Versiones exactas para que los resultados se puedan reproducir.
+# requirements.txt tiene además todas las dependencias transitivas fijadas.
+dependencies = [
+    "pandas==3.0.6",
+    "numpy==2.5.3",
+    "scipy==1.18.1",
+    "scikit-learn==1.9.1",
+    "xgboost==3.4.1",
+    "joblib==1.6.0",
+    "matplotlib==3.11.2",
+    "ipykernel==7.4.0",
+]
+
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
