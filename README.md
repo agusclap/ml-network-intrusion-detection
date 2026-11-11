@@ -1,118 +1,171 @@
+<div align="center">
+
 # Detección de intrusiones en redes con Machine Learning
 
-Trabajo final de Inteligencia Artificial - Ingeniería en Informática - Universidad de la Defensa Nacional (CRUC IUA), 2026.
+### Un detector que clasifica flujos de red como tráfico normal o ataque, y el tipo de ataque, entrenado y evaluado sobre el dataset UNSW-NB15
 
-Docente: Ing. Hernando Alexis González. Modalidad grupal.
+[![Python](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/status-MVP-orange.svg)]()
 
-## Integrantes
+[Demo en vivo](https://agusclap.github.io/ml-network-intrusion-detection/) · [Reportar un bug](../../issues) · [Pedir una funcionalidad](../../issues)
 
-- Maximo Agustin Rodeyro
-- Lautaro Niccolini
+</div>
 
-## De qué se trata
+---
 
-Armamos un sistema de detección de intrusiones (NIDS) basado en Machine Learning. A partir de los datos de un flujo de red, el modelo decide si ese flujo es tráfico normal o un ataque. Como segunda tarea, también intenta predecir qué tipo de ataque es.
+## 📋 Tabla de contenidos
 
-Trabajamos con el dataset [UNSW-NB15](https://research.unsw.edu.au/projects/unsw-nb15-dataset), usando la división en train y test que publicaron sus autores.
+- [Demo](#-demo)
+- [Sobre el proyecto](#-sobre-el-proyecto)
+  - [Contexto académico](#contexto-académico)
+  - [Construido con](#construido-con)
+- [El dataset](#-el-dataset)
+- [Metodología](#-metodología)
+- [Resultados](#-resultados)
+- [Estructura del proyecto](#-estructura-del-proyecto)
+- [Instalación](#-instalación)
+- [Uso](#-uso)
+- [Roadmap](#-roadmap)
+- [Autores](#-autores)
+- [Licencia](#-licencia)
+- [Agradecimientos y referencias](#-agradecimientos-y-referencias)
 
-## Estado actual
+---
 
-El MVP está completo: el pipeline funciona en las dos tareas, está validado con cross-validation sobre el train, los modelos se evaluaron una sola vez sobre el test y hay un script que clasifica un CSV de flujos con el modelo guardado.
+## 🎬 Demo
 
-- [x] Carga de los datos oficiales con verificación de integridad (MD5)
-- [x] Análisis exploratorio, con outliers, entropía y duplicados ([notebooks/01_eda_minimo.ipynb](notebooks/01_eda_minimo.ipynb))
-- [x] Preprocesamiento: one-hot de las categóricas y estandarización de las numéricas para la regresión logística
-- [x] Baselines: regla sin IA (`dpkts == 0`) y clase mayoritaria
-- [x] Cross-validation agrupada de 5 folds con la regla, la regresión logística y XGBoost, en las dos tareas
-- [x] Script de predicción por consola
-- [x] Evaluación final sobre el test, con matrices de confusión y curvas ROC
-- [x] Análisis de los errores en el test ([notebooks/02_analisis_test.ipynb](notebooks/02_analisis_test.ipynb))
-- [x] Revisión de reproducibilidad en otra máquina
+El MVP es un script de consola: recibe un CSV con flujos de red, les aplica el mismo preprocesamiento del entrenamiento y devuelve, para cada flujo, la probabilidad de que sea un ataque y la etiqueta final. Esta es la salida real del script con los 20 flujos de ejemplo del repositorio:
 
-## Propuesta del proyecto
+![Salida real de inference.py clasificando 20 flujos](docs/img/demo_inferencia.png)
 
-La propuesta completa (problema, PEAS, datos, métricas de éxito, baselines y alcance) está en [PROJECT_CHARTER_CORREGIDO.md](PROJECT_CHARTER_CORREGIDO.md) y también en el Issue #1 del repositorio.
+**🔗 Demo en vivo:** https://agusclap.github.io/ml-network-intrusion-detection/ (página con el resumen del proyecto y los resultados).
 
-En resumen:
+---
 
-- **Tarea principal:** clasificación binaria (normal o ataque).
-- **Tarea secundaria:** clasificación multiclase (Normal o una de las 9 categorías de ataque).
-- **Baselines:** una regla sin IA (`dpkts == 0`, es decir, el destino no respondió) y una regresión logística.
-- **Modelo principal:** XGBoost.
-- **Validación:** cross-validation de 5 folds sobre el train, agrupando las filas repetidas para que no queden en entrenamiento y validación a la vez. El test se usa una sola vez, al final.
-- **Objetivo en la tarea binaria:** detectar al menos el 90 % de los ataques sin tener más falsos positivos que la regla sin IA.
-- **Objetivo en la tarea multiclase:** superar a los baselines en Macro-F1.
+## 📖 Sobre el proyecto
 
-## Datos
+Un sistema de detección de intrusiones en red (NIDS) mira el tráfico y avisa cuando algo parece un ataque. Los IDS tradicionales funcionan con firmas: reglas escritas a mano para ataques que ya se conocen, que no detectan bien las variantes nuevas. Nuestra propuesta es entrenar un modelo que aprenda cómo se comporta el tráfico malicioso a partir de ejemplos etiquetados, para que funcione como una capa más de detección.
 
-| Archivo | Registros | Para qué lo usamos |
+El sistema recibe los datos de un **flujo de red** (una conexión entre dos equipos resumida en números: protocolo, servicio, duración, bytes y paquetes de cada lado, TTL, etc.) y resuelve dos tareas: la **binaria** (principal), que decide si el flujo es normal o un ataque, y la **multiclase** (secundaria), que predice si es Normal o una de las 9 categorías de ataque del dataset.
+
+Comparamos dos baselines sin IA (una regla simple y "siempre la clase más frecuente") y una regresión logística contra **XGBoost**. Validamos con cross-validation sobre el train, agrupando las filas repetidas, y evaluamos cada modelo **una sola vez** sobre el test oficial.
+
+**Resultado principal:** XGBoost detecta el **98,3 % de los ataques del test** con un F1 de 0,898, contra 0,733 de la regla sin IA. No cumple uno de los cuatro criterios que fijamos de antemano: su tasa de falsos positivos sube de 8 % en la validación a 25 % en el test, por un sesgo del dataset en la variable TTL que analizamos en [Resultados](#-resultados).
+
+La propuesta completa (problema, PEAS, métricas de éxito, baselines y alcance) está en el [Project Charter](PROJECT_CHARTER_CORREGIDO.md), también publicado como Issue #1. El plan de trabajo está en [PLAN_IMPLEMENTACION.md](PLAN_IMPLEMENTACION.md), el análisis detallado de los datos en [AUDITORIA_VIABILIDAD.md](AUDITORIA_VIABILIDAD.md) y un resumen de estudio del proyecto en [RESUMEN_PROYECTO.md](RESUMEN_PROYECTO.md).
+
+### Contexto académico
+
+- **Asignatura:** Inteligencia Artificial (Ingeniería en Informática)
+- **Institución:** Universidad de la Defensa Nacional, Centro Regional Universitario Córdoba (CRUC IUA)
+- **Cohorte / año:** 2026
+- **Docente:** Ing. Hernando Alexis González
+- **Modalidad:** grupal
+
+### Construido con
+
+- [Python 3.13](https://www.python.org/)
+- [pandas](https://pandas.pydata.org/) / [NumPy](https://numpy.org/)
+- [scikit-learn](https://scikit-learn.org/) — preprocesamiento, regresión logística, cross-validation y métricas
+- [XGBoost](https://xgboost.readthedocs.io/) — modelo principal
+- [matplotlib](https://matplotlib.org/) — matrices de confusión y curvas ROC
+- [Jupyter](https://jupyter.org/) — análisis exploratorio y análisis de errores
+- [uv](https://docs.astral.sh/uv/) — gestión de dependencias y entorno
+
+---
+
+## 📊 El dataset
+
+| Campo | Detalle |
+|---|---|
+| Fuente | [UNSW-NB15](https://research.unsw.edu.au/projects/unsw-nb15-dataset), Australian Centre for Cyber Security, UNSW Canberra (Moustafa y Slay, 2015) |
+| Registros | 175.341 en `UNSW_NB15_training-set.csv` y 82.332 en `UNSW_NB15_testing-set.csv` (la división oficial de los autores); 31 MB y 15 MB |
+| Variables | 45 columnas: 42 de entrada (39 numéricas y 3 categóricas: `proto`, `service`, `state`), `id` y las dos etiquetas |
+| Variable objetivo | `label` en la tarea binaria (0 = normal, 1 = ataque) y `attack_cat` en la multiclase (Normal o Analysis, Backdoor, DoS, Exploits, Fuzzers, Generic, Reconnaissance, Shellcode, Worms) |
+| Período / cobertura | Tráfico generado en 2015 en el laboratorio Cyber Range de UNSW Canberra, mezclando actividad normal real con ataques sintéticos |
+| Licencia del dataset | Uso libre con fines académicos y de investigación, citando los trabajos de los autores; el uso comercial requiere su acuerdo |
+
+Los datos **no están en el repositorio** por su tamaño. En [data/README.md](data/README.md) explicamos cómo descargarlos de la fuente oficial y cómo comprobar con su hash MD5 que son exactamente los archivos que usamos. Ojo con la copia que hay en Kaggle: tiene los nombres de train y test intercambiados.
+
+Elegimos este dataset porque es público, conocido y viene con una división oficial en train y test, así que los resultados se pueden comparar. Además permite armar un baseline sin IA con sentido y tiene problemas reales para analizar: clases que se superponen, un sesgo en el TTL y diferencias entre train y test.
+
+---
+
+## 🔬 Metodología
+
+```mermaid
+flowchart LR
+    A[CSV oficiales<br/>verificados con MD5] --> B[Separar X / y<br/>sin id ni la etiqueta<br/>de la otra tarea]
+    B --> C[Pipeline<br/>one-hot + escalado<br/>ajustado solo con train]
+    C --> D[Regla sin IA ·<br/>regresión logística ·<br/>XGBoost]
+    D --> E[CV agrupada de 5 folds<br/>y umbral out-of-fold]
+    E --> F[Modelo final con<br/>todo el train]
+    F --> G[Test evaluado<br/>una sola vez]
+    F --> H[inference.py<br/>clasifica un CSV]
+```
+
+### Análisis exploratorio
+
+El análisis está en [notebooks/01_eda_minimo.ipynb](notebooks/01_eda_minimo.ipynb). Lo que encontramos y qué decidimos a partir de eso:
+
+- **No hay valores faltantes.** Algunos valores de `state` aparecen solo en el test, así que el encoding tiene que soportar categorías nuevas.
+- **Desbalance.** 68 % de ataques en el train y 55 % en el test. Entre categorías es mucho más fuerte: Generic tiene 40.000 filas y Worms 130. Lo manejamos con pesos por clase y métricas que no se engañan con el desbalance.
+- **Filas repetidas.** El 38 % de las filas del train está repetida. No las eliminamos, porque son flujos reales que se repiten (por ejemplo, durante un escaneo), pero las tenemos en cuenta al validar.
+- **Filas idénticas con distinta etiqueta.** Cerca del 17 % de las filas del train tiene los mismos valores en las 42 variables que otra fila de otra categoría, sobre todo entre Analysis, Backdoor, DoS y Exploits. Ningún modelo puede separarlas: el Macro-F1 máximo posible en el train ronda 0,81.
+- **Sesgo del TTL.** `sttl`, `dttl` y `ct_state_ttl` separan casi solas el tráfico normal de los ataques, por cómo se generó el tráfico en el laboratorio. No es data leakage (el TTL existe en una red real), pero sí un sesgo del dataset. Las dejamos y lo anotamos como riesgo.
+- **Outliers.** Varias variables tienen valores muy extremos (por ejemplo, `sbytes` llega a casi 13 MB con una mediana de 430 bytes). No los eliminamos: en tráfico de red son legítimos y muchas veces son la señal del ataque.
+- **Train y test.** Alrededor del 5 % de las filas del test también están en el train. Evaluamos sobre el test completo porque es el benchmark oficial.
+
+### Preprocesamiento
+
+- En cada tarea se sacan de la entrada `id` y la etiqueta de la otra tarea, porque `attack_cat` revela `label` y al revés. `get_X_y` lo verifica.
+- **One-hot encoding** de las 3 categóricas. Las categorías con menos de 50 filas se agrupan en una sola columna, y quedan 188 columnas. Una categoría nueva queda con todas sus columnas en 0 y no rompe nada.
+- **Estandarización** de las numéricas, solo para la regresión logística, porque es un modelo lineal y le afecta la escala. XGBoost usa árboles y no lo necesita.
+- Todo va dentro de un `Pipeline` de scikit-learn que se ajusta **solo con los datos de entrenamiento** de cada fold y después se aplica a validación y test. La carpeta `data/processed/` queda vacía a propósito: no guardamos datos transformados, porque el preprocesamiento viaja con el modelo.
+- **Desbalance:** pesos por clase (`class_weight` en la regresión logística y `sample_weight` en XGBoost), calculados con el fold de entrenamiento. No generamos datos sintéticos y el test nunca se balancea.
+- **Etiqueta multiclase:** `attack_cat` se codifica con un `LabelEncoder` ajustado con el train y guardado junto con el modelo.
+
+### Modelo(s)
+
+| Modelo | Rol | Por qué |
 |---|---|---|
-| `UNSW_NB15_training-set.csv` | 175.341 | Entrenamiento y cross-validation |
-| `UNSW_NB15_testing-set.csv` | 82.332 | Evaluación final |
+| Regla `dpkts == 0` | Baseline sin IA (binaria) | Si el destino no respondió ningún paquete, es ataque. Es típico de escaneos y algunos DoS, y muestra cuánto se puede lograr sin aprender nada. |
+| Clase mayoritaria | Baseline sin IA (multiclase) | Es el piso mínimo para la multiclase. |
+| Regresión logística (L2, `C = 1`, pesos por clase) | Baseline de ML | Es un modelo lineal simple e interpretable: si XGBoost no le gana, la complejidad extra no se justifica. |
+| **XGBoost** (400 árboles, profundidad 6, tasa 0,1) | Modelo principal | Funciona muy bien con datos tabulares y variables heterogéneas, combina condiciones sobre varias variables y no necesita escalado. |
 
-Los datos no están en el repositorio porque son pesados. En [data/README.md](data/README.md) explicamos cómo descargarlos y cómo comprobar que son los archivos correctos.
+Los hiperparámetros se fijaron antes de entrenar, sin búsqueda, y la semilla es 42 en todo el proyecto.
 
-Ojo con la copia del dataset que hay en Kaggle: tiene los nombres de train y test intercambiados.
+### Validación
 
-## Estructura del repositorio
+- **Cross-validation de 5 folds** sobre el train con `StratifiedGroupKFold`: las filas con los mismos valores en las 42 variables forman un grupo y cada grupo cae entero en un fold. Así ninguna fila repetida queda en entrenamiento y en validación a la vez. Cada fold mantiene la proporción de clases del train. Lo cambiamos por recomendación de la cátedra: con un `StratifiedKFold` común, las métricas salían infladas por memorización.
+- **Umbral de decisión (binaria):** con las predicciones out-of-fold elegimos el umbral con mejor F1 entre los que detectan al menos el 90 % de los ataques. Se guarda con el modelo y nunca se recalcula con el test.
+- **Test:** el modelo final se entrena con todo el train y se evalúa **una sola vez** en el test oficial. `evaluate.py` se niega a correr si ese modelo ya fue evaluado.
+- **Métricas:** priorizamos el recall porque en un NIDS el error más grave es un ataque no detectado, pero controlamos la tasa de falsos positivos, porque un detector que da alarma por todo no sirve. No usamos accuracy como métrica principal porque con clases desbalanceadas engaña. En la multiclase usamos Macro-F1, que pesa igual a todas las clases.
 
-```
-data/              datos (no se suben, ver data/README.md)
-examples/          CSV de ejemplo para probar el script de predicción
-notebooks/         análisis exploratorio y análisis de los errores en el test
-src/
-  config.py        semilla, rutas, hashes de los datos, columnas e hiperparámetros
-  data.py          verificación y carga de los datos; separación en X e y sin el target de la otra tarea
-  features.py      preprocesamiento (one-hot y escalado)
-  baselines.py     regla sin IA y clase mayoritaria
-  metrics.py       métricas y elección del umbral
-  train.py         cross-validation, umbral y entrenamiento del modelo final
-  evaluate.py      evaluación única de los modelos guardados sobre el test
-  plots.py         matrices de confusión y curvas ROC
-  inference.py     predicción sobre un CSV de flujos con un modelo guardado
-models/            modelos entrenados (no se suben, se generan con train.py)
-reports/metrics/   métricas en JSON (*_cv.json de la cross-validation, *_test.json del test)
-reports/figures/   matrices de confusión y curvas ROC (*_test_* son del test)
-```
+---
 
-## Instalación y uso
+## 📈 Resultados
 
-Probado con Python 3.13. El proyecto no usa variables de entorno ni credenciales, así que no hace falta un archivo `.env`. Los datos y los modelos entrenados no están en el repositorio: los datos se descargan según [data/README.md](data/README.md) y los modelos se generan con `train.py`.
+Resultados de la tarea binaria en el **test**, con cada modelo evaluado una sola vez:
 
-```bash
-# Crear el entorno e instalar dependencias
-python -m venv .venv
-.venv\Scripts\activate          # en Linux/Mac: source .venv/bin/activate
-pip install -r requirements.txt
+| Métrica | Baseline: regla sin IA | Regresión logística | Modelo final: XGBoost |
+|---|---|---|---|
+| Recall (ataques detectados) | 0,658 | 0,964 | **0,983** |
+| Tasa de falsos positivos | **0,167** | 0,372 | 0,251 |
+| Precisión | 0,828 | 0,761 | **0,828** |
+| F1 | 0,733 | 0,850 | **0,898** |
+| ROC-AUC | 0,745 | 0,956 | **0,984** |
+| Macro-F1 (multiclase) | 0,062 (clase mayoritaria) | 0,352 | **0,524** |
 
-# Descargar los datos según data/README.md y verificarlos
-python -m src.data
+![Matriz de confusión de XGBoost en el test](docs/img/binary_xgb_test_cm.png)
 
-# Cross-validation y entrenamiento final
-python -m src.train --model xgb                       # tarea binaria (también: heuristic, lr)
-python -m src.train --task multiclass --model xgb     # tarea multiclase
+### Cross-validation sobre el train
 
-# Evaluación final sobre el test (con los modelos ya entrenados)
-python -m src.evaluate --task binary --model xgb      # también: heuristic, lr
-python -m src.evaluate --task multiclass --model xgb
+Media ± desviación estándar de los 5 folds.
 
-# Clasificar un CSV de flujos con el modelo guardado
-python -m src.inference --input examples/flujos_ejemplo.csv --task binary --output predicciones.csv
-```
-
-Cada corrida de `train.py` imprime las métricas de cada fold y su promedio, guarda el modelo entrenado con todo el train en `models/` y las métricas en `reports/metrics/`. `inference.py` verifica que el CSV tenga las columnas que espera el modelo, aplica el mismo preprocesamiento del entrenamiento y el umbral guardado, y escribe la predicción y la probabilidad de cada flujo.
-
-`evaluate.py` no entrena nada: carga el modelo guardado y su umbral, y calcula las métricas sobre el test. Si el JSON de ese modelo ya existe, se niega a correr, para que el test no se evalúe dos veces sin querer. Con `--split train` se puede probar el script sin tocar el test.
-
-Para reproducir todo desde cero hay que correr `train.py` y después `evaluate.py` con cada modelo (heuristic, lr y xgb) en las dos tareas. Como las métricas del test ya están en el repositorio, antes de volver a evaluar hay que borrar los `reports/metrics/*_test.json`; si no, `evaluate.py` se niega a correr. Sobre la reproducibilidad entre distintas máquinas, ver la sección [Reproducibilidad](#reproducibilidad).
-
-## Resultados
-
-Primero elegimos y validamos los modelos con cross-validation de 5 folds sobre el train (media ± desviación estándar). Las filas idénticas se agrupan en el mismo fold, así que el modelo nunca se evalúa con una fila que ya vio al entrenar. Después evaluamos cada modelo una sola vez sobre el test, sin cambiar nada.
-
-### Cross-validation: tarea binaria
-
-Con el umbral por defecto (0,5):
+**Tarea binaria, umbral 0,5:**
 
 | Modelo | F1 | Recall | Precisión | Tasa de falsos positivos | ROC-AUC |
 |---|---|---|---|---|---|
@@ -120,18 +173,14 @@ Con el umbral por defecto (0,5):
 | Regresión logística | 0,950 ± 0,001 | 0,952 ± 0,001 | 0,949 ± 0,001 | 0,109 ± 0,002 | 0,984 |
 | XGBoost | **0,965 ± 0,001** | **0,955 ± 0,002** | **0,976 ± 0,001** | **0,050 ± 0,002** | **0,993** |
 
-Con el umbral elegido usando las predicciones out-of-fold (el de mejor F1 entre los que dan recall de 0,90 o más):
+**Tarea binaria, umbral elegido con las predicciones out-of-fold:**
 
 | Modelo | Umbral | Recall | Tasa de falsos positivos | F1 |
 |---|---|---|---|---|
 | Regresión logística | 0,367 | 0,982 | 0,162 | 0,954 |
 | XGBoost | 0,358 | 0,974 | 0,080 | 0,968 |
 
-- Los dos modelos de ML superan ampliamente a la regla sin IA, que solo detecta el 65 % de los ataques.
-- XGBoost detecta casi la misma proporción de ataques que la regresión logística, pero con menos de la mitad de falsos positivos. La regresión logística separa las clases con una frontera lineal; los árboles de XGBoost pueden combinar condiciones sobre varias variables, y en este problema eso marca la diferencia.
-- Con su umbral, XGBoost cumple el criterio de la tarea binaria (recall de al menos 0,90 con menos falsos positivos que la regla sin IA). La regresión logística, para llegar a ese recall, tiene más falsos positivos que la regla.
-
-### Cross-validation: tarea multiclase
+**Tarea multiclase:**
 
 | Modelo | Macro-F1 | Weighted-F1 | Exactitud balanceada |
 |---|---|---|---|
@@ -141,32 +190,14 @@ Con el umbral elegido usando las predicciones out-of-fold (el de mejor F1 entre 
 
 F1 por clase de XGBoost: Generic 0,990 · Normal 0,912 · Reconnaissance 0,827 · Fuzzers 0,750 · Shellcode 0,702 · Worms 0,680 · Exploits 0,652 · DoS 0,379 · Analysis 0,184 · Backdoor 0,121.
 
-- XGBoost supera a los dos baselines por mucho más que la variación entre folds, así que cumple el criterio de la tarea multiclase.
-- Reconoce bien incluso clases muy chicas como Worms y Shellcode, gracias a los pesos por clase.
-- Analysis, Backdoor y DoS quedan bajas en todos los modelos: muchas de sus filas tienen exactamente los mismos valores que filas de otras categorías, sobre todo Exploits, y ningún modelo puede distinguirlas.
-
-### Qué cambió al agrupar las filas repetidas
-
-Antes usábamos un `StratifiedKFold` común. Por recomendación de la cátedra pasamos a `StratifiedGroupKFold`, que pone todas las repeticiones de una fila en el mismo fold:
-
-- En la tarea binaria, XGBoost bajó un poco (F1 de 0,967 a 0,965, tasa de falsos positivos de 4,6 % a 5,0 %): parte del resultado anterior venía de filas de validación que el modelo ya había visto al entrenar.
-- En la multiclase, Analysis, DoS y Backdoor mejoraron (de 0,12 a 0,18, de 0,32 a 0,38 y de 0,07 a 0,12). Lo más probable es que antes, al ver en entrenamiento una fila repetida con la etiqueta más frecuente de su grupo, el modelo aprendiera esa etiqueta y fallara en validación con las repeticiones de las clases minoritarias.
+- Los dos modelos de ML superan ampliamente a la regla sin IA, que solo detecta el 65 % de los ataques.
+- XGBoost detecta casi los mismos ataques que la regresión logística con menos de la mitad de falsos positivos: la logística separa las clases con una frontera lineal, y los árboles combinan condiciones sobre varias variables.
+- En la multiclase, XGBoost supera a los baselines por mucho más que la variación entre folds y reconoce bien clases muy chicas como Worms y Shellcode. Analysis, Backdoor y DoS quedan bajas en todos los modelos por las filas idénticas con otras categorías.
+- **Al agrupar las filas repetidas**, XGBoost binario bajó un poco (F1 de 0,967 a 0,965, falsos positivos de 4,6 % a 5,0 %): esa diferencia venía de filas de validación que el modelo ya había visto. En la multiclase, Analysis, DoS y Backdoor mejoraron (de 0,12 a 0,18, de 0,32 a 0,38 y de 0,07 a 0,12).
 
 ### Evaluación final sobre el test
 
-Cada modelo se evaluó una sola vez, con el umbral elegido en el train. Después de eso no se cambió nada.
-
-**Tarea binaria**
-
-| Modelo | Recall | Tasa de falsos positivos | Precisión | F1 | ROC-AUC |
-|---|---|---|---|---|---|
-| Regla sin IA (`dpkts == 0`) | 0,658 | 0,167 | 0,828 | 0,733 | 0,745 |
-| Regresión logística (umbral 0,367) | 0,964 | 0,372 | 0,761 | 0,850 | 0,956 |
-| XGBoost (umbral 0,358) | **0,983** | 0,251 | **0,828** | **0,898** | **0,984** |
-
-![Matriz de confusión de XGBoost en el test](reports/figures/binary_xgb_test_cm.png)
-
-**Tarea multiclase**
+**Tarea multiclase:**
 
 | Modelo | Macro-F1 | Weighted-F1 | Exactitud balanceada |
 |---|---|---|---|
@@ -176,7 +207,7 @@ Cada modelo se evaluó una sola vez, con el umbral elegido en el train. Después
 
 F1 por clase de XGBoost: Generic 0,984 · Reconnaissance 0,856 · Normal 0,759 · Worms 0,756 · Exploits 0,698 · Shellcode 0,396 · Fuzzers 0,375 · DoS 0,260 · Backdoor 0,105 · Analysis 0,053.
 
-**Criterios de éxito del Charter**
+**Criterios de éxito fijados en el Charter antes de entrenar:**
 
 | Criterio | Resultado en el test | ¿Se cumple? |
 |---|---|---|
@@ -185,63 +216,170 @@ F1 por clase de XGBoost: Generic 0,984 · Reconnaissance 0,856 · Normal 0,759 �
 | Binaria: mejor F1 que los dos baselines | 0,898 contra 0,733 y 0,850 | Sí |
 | Multiclase: mantener la ventaja en Macro-F1 sobre los dos baselines | 0,524 contra 0,062 y 0,352 | Sí |
 
-XGBoost sigue siendo el mejor modelo en las dos tareas y detecta el 98 % de los ataques del test, pero **no cumple el criterio de falsos positivos**: en la cross-validation tenía 8,0 % y en el test sube a 25,1 %. No cambiamos el umbral ni el modelo después de ver el test, porque entonces el resultado dejaría de ser una evaluación independiente. Lo reportamos como está y explicamos la causa en la sección siguiente.
+Las matrices de confusión y curvas ROC de todos los modelos, en la cross-validation y en el test, están en [reports/figures/](reports/figures/), y las métricas completas en JSON en [reports/metrics/](reports/metrics/).
 
-### Por qué aumentan los falsos positivos en el test
+### Análisis crítico: por qué aumentan los falsos positivos en el test
 
-Casi todas las falsas alarmas vienen de una sola variable, `sttl` (el TTL de los paquetes del origen). Proporción de flujos con cada valor:
+XGBoost es el mejor modelo en las dos tareas, pero **no cumple el criterio de falsos positivos**: en la cross-validation tenía 8,0 % y en el test sube a 25,1 %. Casi todas las falsas alarmas vienen de una sola variable, `sttl` (el TTL de los paquetes del origen). Proporción de flujos con cada valor:
 
 | `sttl` | Normales en train | Ataques en train | Normales en test |
 |---|---|---|---|
 | 31 | 70,5 % | 0 % | 45,1 % |
 | 254 | 20,1 % | 86,7 % | 40,7 % |
 
-- En el train, `sttl = 254` aparece en el 87 % de los ataques y solo en el 20 % del tráfico normal, así que el modelo aprendió a usarlo como señal de ataque. Es el sesgo del TTL que ya habíamos marcado como limitación del dataset en el Charter.
-- En el test, la proporción de tráfico normal con `sttl = 254` se duplica (del 20 % al 41 %). De los 9.283 falsos positivos de XGBoost, 8.099 (el 87 %) tienen ese valor. En cambio, los flujos normales con `sttl = 31`, que son el 45 % del tráfico normal del test, no generan ninguna falsa alarma.
+- En el train, `sttl = 254` aparece en el 87 % de los ataques y solo en el 20 % del tráfico normal, así que el modelo lo aprendió como señal de ataque. Es el sesgo del TTL que ya habíamos marcado como riesgo.
+- En el test, el tráfico normal con `sttl = 254` se duplica. De los 9.283 falsos positivos de XGBoost, 8.099 (el 87 %) tienen ese valor. Los flujos normales con `sttl = 31` no generan ninguna falsa alarma.
 - No es algo solo de nuestro modelo: la regla sin IA también empeora (de 0,119 a 0,167). El tráfico normal del test es distinto al del train.
-- En la multiclase pasa lo mismo: el modelo multiclase clasifica como Fuzzers 7.402 de esas falsas alarmas. Por eso en el test baja el F1 de Normal y la precisión de Fuzzers es de apenas 0,26.
-- El ROC-AUC sigue siendo alto (0,984): el modelo sigue ordenando bien los flujos de más a menos sospechosos. Lo que deja de funcionar es el umbral elegido en el train, porque la distribución del tráfico normal cambió.
+- El modelo multiclase clasifica como Fuzzers 7.402 de esas falsas alarmas; por eso en el test baja el F1 de Normal y la precisión de Fuzzers es de 0,26.
+- El ROC-AUC sigue en 0,984: el modelo ordena bien los flujos. Lo que falla es el umbral elegido con el train, porque cambió la distribución del tráfico normal.
 
-El código de este análisis está en [notebooks/02_analisis_test.ipynb](notebooks/02_analisis_test.ipynb). Para usar el modelo en otra red habría que volver a elegir el umbral con tráfico de esa red, o entrenar sin las variables de TTL. Las dos cosas quedan fuera del alcance de este trabajo.
+**No cambiamos el umbral ni el modelo después de ver el test**, porque el resultado dejaría de ser una evaluación independiente. Lo reportamos como está. El análisis completo está en [notebooks/02_analisis_test.ipynb](notebooks/02_analisis_test.ipynb). Para usar el modelo en otra red habría que volver a elegir el umbral con tráfico de esa red o entrenar sin las variables de TTL (ver [Roadmap](#-roadmap)).
 
-## Reproducibilidad
+### Reproducibilidad
 
-- Los datos se verifican con su MD5 antes de usarlos, la semilla es 42 en todo el proyecto y las versiones de las librerías están fijas en `requirements.txt`.
-- En la misma máquina, volver a correr todo da exactamente los mismos números: lo comprobamos repitiendo la cross-validation completa.
-- En otra máquina (Linux con 8 núcleos, contra Windows con 20 núcleos) los datos, los grupos y los folds salen idénticos, pero al entrenar la regresión logística y XGBoost los resultados cambian en el tercer decimal. Son diferencias de redondeo en los cálculos, que dependen del sistema y del procesador. Esa pequeña diferencia mueve un poco el umbral elegido (0,346 en vez de 0,358 en XGBoost), sin cambiar las conclusiones: en esa máquina XGBoost dio en la cross-validation un recall de 0,976 y una tasa de falsos positivos de 0,084.
-- Los números de este README, los JSON y las figuras salen todos de la misma máquina.
+- Los datos se verifican con su MD5 antes de usarlos, la semilla es 42 en todo el proyecto y las versiones de las librerías están fijas en `pyproject.toml` y `requirements.txt`.
+- En la misma máquina, volver a correr todo da exactamente los mismos números. Lo comprobamos clonando el repositorio en un entorno nuevo y repitiendo el entrenamiento y la evaluación: los JSON de métricas salen idénticos.
+- En otra máquina (Linux con 8 núcleos, contra Windows con 20) los datos, los grupos y los folds salen idénticos, pero los modelos cambian en el tercer decimal por diferencias de redondeo del procesador. Eso mueve un poco el umbral (0,346 en vez de 0,358 en XGBoost) sin cambiar las conclusiones: en esa máquina XGBoost dio en la cross-validation un recall de 0,976 y una tasa de falsos positivos de 0,084.
 
-## Cosas a tener en cuenta del dataset
+---
 
-- Para que el modelo no "vea la respuesta", en cada tarea sacamos de la entrada la columna `id` y la etiqueta que no corresponde (`attack_cat` en la tarea binaria y `label` en la multiclase).
-- Hay registros con exactamente los mismos valores pero distinta categoría de ataque, sobre todo entre Analysis, Backdoor, DoS y Exploits. Por eso ningún modelo puede separar esas clases del todo.
-- Las variables de TTL (`sttl`, `dttl`, `ct_state_ttl`) separan casi solas el tráfico normal de los ataques, por cómo se generó el tráfico en el laboratorio. Las dejamos en el modelo y lo tomamos como una limitación del dataset. En el test se ve el costo de esa decisión: la mayoría de los falsos positivos vienen de `sttl` (ver [Por qué aumentan los falsos positivos en el test](#por-qué-aumentan-los-falsos-positivos-en-el-test)).
-- En el train el 68 % de los registros son ataques y en el test el 55 %. Además, alrededor del 5 % de las filas del test también están en el train.
-- El 38 % de las filas del train está repetido. No lo eliminamos porque son flujos reales que se repiten, no errores de carga; para que no infle la validación, la cross-validation agrupa las repeticiones en el mismo fold.
-- Los valores extremos de las variables numéricas tampoco se eliminan: en tráfico de red son legítimos y muchas veces son la señal del ataque.
+## 📂 Estructura del proyecto
 
-La justificación de cada decisión y su relación con el teórico de la materia está en la sección 3 y en la tabla "Relación con los contenidos de la materia" del [Charter](PROJECT_CHARTER_CORREGIDO.md). El análisis completo de los datos está en [AUDITORIA_VIABILIDAD.md](AUDITORIA_VIABILIDAD.md) y un resumen del proyecto en [RESUMEN_PROYECTO.md](RESUMEN_PROYECTO.md).
+```text
+.
+├── README.md
+├── pyproject.toml              # dependencias con versiones exactas
+├── requirements.txt            # todas las dependencias, incluidas las transitivas, fijadas
+├── LICENSE
+├── AGENTS.md                   # instrucciones de la plantilla de la cátedra
+├── PROJECT_CHARTER_CORREGIDO.md, PLAN_IMPLEMENTACION.md,
+│   AUDITORIA_VIABILIDAD.md, RESUMEN_PROYECTO.md   # documentación del proyecto
+├── src/
+│   ├── config.py               # semilla, rutas, hashes MD5, columnas e hiperparámetros
+│   ├── data.py                 # verificación y carga de los datos; X / y sin la etiqueta de la otra tarea
+│   ├── features.py             # preprocesamiento (one-hot y escalado)
+│   ├── baselines.py            # regla sin IA y clase mayoritaria
+│   ├── metrics.py              # métricas y elección del umbral
+│   ├── train.py                # cross-validation, umbral y entrenamiento del modelo final
+│   ├── evaluate.py             # evaluación única de los modelos guardados sobre el test
+│   ├── plots.py                # matrices de confusión y curvas ROC
+│   └── inference.py            # el MVP: clasifica un CSV de flujos con un modelo guardado
+├── notebooks/
+│   ├── 01_eda_minimo.ipynb     # análisis exploratorio
+│   └── 02_analisis_test.ipynb  # análisis de los errores en el test
+├── data/
+│   ├── README.md               # cómo descargar y verificar los datos
+│   ├── raw/                    # los dos CSV oficiales (no se suben)
+│   └── processed/              # vacía: el preprocesamiento va dentro del Pipeline del modelo
+├── models/                     # modelos entrenados (no se suben, se generan con train.py)
+├── reports/
+│   ├── metrics/                # métricas en JSON (*_cv.json y *_test.json)
+│   └── figures/                # matrices de confusión y curvas ROC
+├── examples/                   # CSV de ejemplo para probar inference.py
+├── tests/                      # vacía: no hay tests automáticos (ver Roadmap)
+└── docs/                       # demo estática (GitHub Pages) e imágenes del README
+    ├── index.html
+    ├── img/
+    └── assets/
+```
 
-## Cronograma
+---
 
-| Semana | Fechas | Qué hacemos | Estado |
-|---|---|---|---|
-| 1 | 28/9 – 4/10 | Repositorio, entorno, carga de datos y análisis exploratorio | Hecho |
-| 2 | 5/10 – 11/10 | Preprocesamiento, regla sin IA y regresión logística binaria | Hecho |
-| 3 | 12/10 – 18/10 | XGBoost binario y complemento del análisis exploratorio | Hecho |
-| 4 | 19/10 – 25/10 | Tarea multiclase | Hecho |
-| 5 | 26/10 – 1/11 | Consulta con la cátedra, script de predicción y validación agrupada | Hecho |
-| 6 | 2/11 – 8/11 | Evaluación final en el test, figuras, análisis de errores y reproducibilidad | Hecho |
-| 7 | 9/11 – 13/11 | Documentación final y preparación de la defensa. Entrega el viernes 13/11 | En curso |
+## ⚙️ Instalación
 
-La evaluación sobre el test la dejamos para después de la consulta con la cátedra, para incorporar sus correcciones sin haber mirado todavía el test. El detalle está en [PLAN_IMPLEMENTACION.md](PLAN_IMPLEMENTACION.md).
+### Prerrequisitos
 
-## Forma de trabajo
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) (o Python 3.12 o superior con `pip`)
+- Git
 
-- La rama `main` tiene siempre una versión estable y cada tarea se hace en su propia rama.
-- En los commits ponemos qué se hizo y cuántas horas llevó, por ejemplo: `feat(data): carga y verificación de los CSV [1.5h]`.
+### Pasos
 
-## Referencias
+```bash
+# 1. Cloná el repositorio
+git clone https://github.com/agusclap/ml-network-intrusion-detection.git
+cd ml-network-intrusion-detection
 
-- Moustafa, N. y Slay, J. (2015). UNSW-NB15: a comprehensive data set for network intrusion detection systems (UNSW-NB15 network data set). Military Communications and Information Systems Conference (MilCIS). https://doi.org/10.1109/MilCIS.2015.7348942
+# 2. Creá el entorno virtual (probado con Python 3.13)
+uv venv --python 3.13
+
+# 3. Activalo
+# Windows:
+.venv\Scripts\activate
+# Linux/Mac:
+source .venv/bin/activate
+
+# 4. Instalá las dependencias
+uv pip install -e .
+```
+
+Sin uv, el mismo resultado se logra con `python -m venv .venv`, activando el entorno y corriendo `pip install -e .`. Para replicar exactamente nuestro entorno, incluidas las dependencias transitivas, está `pip install -r requirements.txt`.
+
+**5. Descargá los datos.** Seguí los pasos de [data/README.md](data/README.md) para bajar los dos CSV oficiales y dejarlos en `data/raw/`. Después verificalos:
+
+```bash
+python -m src.data
+```
+
+El proyecto no usa variables de entorno ni credenciales, así que no hace falta un archivo `.env`.
+
+---
+
+## ▶️ Uso
+
+Todos los comandos se corren desde la raíz del repositorio, con el entorno activado.
+
+```bash
+# Cross-validation, elección del umbral y entrenamiento del modelo final (guarda models/*.joblib)
+python -m src.train --model xgb                       # tarea binaria (también: heuristic, lr)
+python -m src.train --task multiclass --model xgb     # tarea multiclase
+
+# Evaluación final sobre el test, con los modelos ya entrenados
+python -m src.evaluate --task binary --model xgb      # también: heuristic, lr
+python -m src.evaluate --task multiclass --model xgb
+
+# Clasificar un CSV de flujos con el modelo guardado
+python -m src.inference --input examples/flujos_ejemplo.csv --task binary --output predicciones.csv
+python -m src.inference --input examples/flujos_ejemplo.csv --task multiclass --output predicciones.csv
+```
+
+Entrenar los 6 modelos (3 por tarea) tarda unos 9 minutos en nuestra máquina. Cada corrida de `train.py` imprime las métricas de cada fold y su promedio, y guarda el modelo y sus métricas en `models/` y `reports/metrics/`.
+
+`inference.py` verifica que el CSV tenga las 42 columnas que espera el modelo (si falta alguna, corta con un error que dice cuáles; si sobran, las ignora con un aviso), aplica el preprocesamiento y el umbral guardados, y escribe un CSV con el `id`, la probabilidad y la etiqueta de cada flujo. La salida esperada es la de la captura de la [Demo](#-demo). En la tarea multiclase devuelve la categoría y su probabilidad.
+
+`evaluate.py` no entrena nada: carga el modelo guardado y calcula las métricas sobre el test. Como las métricas del test ya están en el repositorio, para volver a evaluar hay que borrar antes los `reports/metrics/*_test.json`; si no, se niega a correr, para que el test no se evalúe dos veces sin querer. Con `--split train` se puede probar el script sin tocar el test.
+
+Los notebooks se abren con Jupyter (o desde VS Code) usando el kernel del entorno `.venv`. `01_eda_minimo.ipynb` necesita los datos y `02_analisis_test.ipynb` necesita además los modelos entrenados.
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] Entrenar sin las variables de TTL (`sttl`, `dttl`, `ct_state_ttl`) para medir cuánto dependen los modelos de ese sesgo y si se vuelven más robustos en el test.
+- [ ] Evaluar sobre la parte del test que no aparece en el train, y recalibrar el umbral con tráfico de la red donde se vaya a usar.
+- [ ] Probar unas pocas configuraciones de XGBoost con cross-validation y analizar qué variables pesan más en las predicciones.
+- [ ] Sumar tests automáticos de la carga de datos y de `inference.py`, y una demo interactiva que clasifique un CSV subido por el usuario.
+
+---
+
+## 👥 Autores
+
+- **Maximo Agustin Rodeyro** — [GitHub](https://github.com/agusclap). Configuración, carga de datos, preprocesamiento, entrenamiento con cross-validation, evaluación, script de inferencia y documentación.
+- **Lautaro Niccolini** — [GitHub](https://github.com/Lauti00). Análisis exploratorio, baselines y métricas, matrices de confusión y curvas ROC, y prueba de reproducibilidad en otra máquina.
+
+Trabajamos con la rama `main` siempre estable y una rama por tarea. En cada commit indicamos qué se hizo y cuántas horas llevó, por ejemplo `feat(data): verificación MD5 de los CSV oficiales [0.5h]`.
+
+---
+
+## 📄 Licencia
+
+El código de este proyecto está bajo la licencia [MIT](LICENSE). Ver el archivo `LICENSE` para más detalle. El dataset UNSW-NB15 no se redistribuye en este repositorio y tiene sus propias condiciones de uso (ver [El dataset](#-el-dataset)).
+
+---
+
+## 🙏 Agradecimientos y referencias
+
+- Moustafa, N. y Slay, J. (2015). UNSW-NB15: a comprehensive data set for network intrusion detection systems (UNSW-NB15 network data set). *Military Communications and Information Systems Conference (MilCIS)*, IEEE. https://doi.org/10.1109/MilCIS.2015.7348942
+- Moustafa, N. y Slay, J. (2016). The evaluation of Network Anomaly Detection Systems: Statistical analysis of the UNSW-NB15 dataset and the comparison with the KDD99 dataset. *Information Security Journal: A Global Perspective*.
 - UNSW Canberra. The UNSW-NB15 Dataset. https://research.unsw.edu.au/projects/unsw-nb15-dataset
+- Documentación de [scikit-learn](https://scikit-learn.org/stable/) (`Pipeline`, `ColumnTransformer`, `StratifiedGroupKFold`) y de [XGBoost](https://xgboost.readthedocs.io/).
+- Al Ing. Hernando Alexis González, por la revisión del proyecto y la recomendación de agrupar las filas repetidas en la cross-validation.

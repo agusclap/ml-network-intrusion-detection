@@ -121,24 +121,26 @@ Nada más.
 
 Cuando todos los ítems estén marcados, **el TP está terminado**. Ninguno de los extras del §10 es necesario.
 
-- [ ] Los dos CSV oficiales están en `data/raw/` con nombre oficial y `python -m src.data` verifica sus MD5.
-- [ ] `data/README.md` documenta procedencia (URL oficial, fecha, MD5) y la nota sobre Kaggle.
-- [ ] Charter corregido publicado como Issue #1 y en el README; DOCX actualizado con el mismo texto.
-- [ ] Repo con `data/ notebooks/ src/ models/ reports/`, `.gitignore`, rama `main` + ramas de feature, commits con horas.
-- [ ] Venv + `requirements.txt` con versiones exactas; Python ≥ 3.10; semilla global en `config.py`.
-- [ ] Notebook de EDA mínimo ejecutada de punta a punta, con las celdas de outliers, entropía y la justificación de duplicados.
-- [ ] `src/data.py` elimina `id` y el target alternativo en ambas tareas.
-- [ ] Pipeline `ColumnTransformer` + `Pipeline` ajustado solo con datos de entrenamiento/fold.
-- [ ] Baseline heurístico (`dpkts == 0`) y clase mayoritaria evaluados.
-- [ ] LR y XGBoost (parámetros fijos) entrenados y validados por CV 5-fold (media ± std) en ambas tareas; en multiclase, `attack_cat` codificada con `LabelEncoder` ajustado solo con train.
-- [ ] Umbral binario elegido con predicciones OOF según la regla pre-registrada.
-- [ ] Modelos congelados; test oficial evaluado **una sola vez** por tarea; métricas en `reports/metrics/*.json`; matrices en `reports/figures/`.
-- [ ] Criterios de éxito del Charter verificados y reportados (cumplidos o no, con explicación).
-- [ ] Pipelines guardados en `models/*.joblib`, regenerables con `train.py`.
-- [ ] `python -m src.inference --input archivo.csv --task binary|multiclass` funciona desde un venv limpio y rechaza esquemas inválidos.
-- [ ] README permite recrear el entorno, ejecutar cada script y reproducir cada número; incluye limitaciones (solapamiento de etiquetas, sesgo TTL, cambio de prior, duplicados) y la declaración sobre el uso del test.
-- [ ] El otro integrante reprodujo los resultados desde cero con los 4 comandos.
-- [ ] Podemos explicar en la defensa: por qué XGBoost, por qué esos baselines, cómo evitamos leakage, por qué no hay meta absoluta de Macro-F1, qué es el sesgo TTL, qué limita el dataset.
+Estado al 11/11/2026: todos los ítems están cumplidos. Las aclaraciones van entre paréntesis.
+
+- [x] Los dos CSV oficiales están en `data/raw/` con nombre oficial y `python -m src.data` verifica sus MD5.
+- [x] `data/README.md` documenta procedencia (URL oficial, fecha, MD5) y la nota sobre Kaggle.
+- [x] Charter corregido publicado como Issue #1 y en el README (la versión vigente es la del Issue y `PROJECT_CHARTER_CORREGIDO.md`; el DOCX no se versiona).
+- [x] Repo con `data/ notebooks/ src/ models/ reports/`, `.gitignore`, rama `main` + ramas de feature, commits con horas (salvo algunos commits de la primera semana, que no las tienen).
+- [x] Venv + `requirements.txt` con versiones exactas; Python ≥ 3.10; semilla global en `config.py`.
+- [x] Notebook de EDA mínimo ejecutada de punta a punta, con las celdas de outliers, entropía y la justificación de duplicados.
+- [x] `src/data.py` elimina `id` y el target alternativo en ambas tareas.
+- [x] Pipeline `ColumnTransformer` + `Pipeline` ajustado solo con datos de entrenamiento/fold.
+- [x] Baseline heurístico (`dpkts == 0`) y clase mayoritaria evaluados.
+- [x] LR y XGBoost (parámetros fijos) entrenados y validados por CV 5-fold (media ± std) en ambas tareas; en multiclase, `attack_cat` codificada con `LabelEncoder` ajustado solo con train (la CV es agrupada por filas idénticas, por recomendación de la cátedra).
+- [x] Umbral binario elegido con predicciones OOF según la regla pre-registrada.
+- [x] Modelos congelados; test oficial evaluado **una sola vez** por tarea; métricas en `reports/metrics/*.json`; matrices en `reports/figures/`.
+- [x] Criterios de éxito del Charter verificados y reportados (cumplidos o no, con explicación). (Se cumplen 3 de 4; el de falsos positivos no, por el sesgo del TTL. Ver el README.)
+- [x] Pipelines guardados en `models/*.joblib`, regenerables con `train.py`.
+- [x] `python -m src.inference --input archivo.csv --task binary|multiclass` funciona desde un venv limpio y rechaza esquemas inválidos.
+- [x] README permite recrear el entorno, ejecutar cada script y reproducir cada número; incluye limitaciones (solapamiento de etiquetas, sesgo TTL, cambio de prior, duplicados) y la declaración sobre el uso del test.
+- [x] El otro integrante reprodujo los resultados desde cero con los 4 comandos (en su máquina los modelos difieren en el tercer decimal por el redondeo del procesador; ver la sección Reproducibilidad del README).
+- [x] Podemos explicar en la defensa: por qué XGBoost, por qué esos baselines, cómo evitamos leakage, por qué no hay meta absoluta de Macro-F1, qué es el sesgo TTL, qué limita el dataset.
 
 ## 9. Si el núcleo se atrasa (orden de simplificación)
 
