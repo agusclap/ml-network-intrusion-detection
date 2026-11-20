@@ -14,6 +14,8 @@ Nosotros lo descargamos el 9 de septiembre de 2026.
 
 No usen la copia que está en Kaggle. Tiene los mismos datos, pero los archivos de train y test tienen los nombres intercambiados, así que usándola tal cual se termina entrenando con el test.
 
+También hay una copia en Hugging Face ([Mireu-Lab/UNSW-NB15](https://huggingface.co/datasets/Mireu-Lab/UNSW-NB15)) con los mismos archivos, que se puede usar como alternativa a la descarga manual. Igual que en Kaggle, ahí train y test tienen los nombres intercambiados: verificá el MD5 de cada archivo con la tabla de abajo para saber cuál es cuál antes de ubicarlos en `data/raw/`.
+
 ## Dónde ubicar los archivos
 
 Del ZIP solo necesitamos los dos archivos que están en la carpeta `Training and Testing Sets/`. Van en `data/raw/`:
