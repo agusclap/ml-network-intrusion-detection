@@ -35,7 +35,7 @@ models/*
 reports/**/tmp/
 
 # --- Documentos de oficina y material de la cátedra -------------------
-# El Charter vive como PROJECT_CHARTER_CORREGIDO.md (versionado);
+# El Charter vive como docs/informes/PROJECT_CHARTER_CORREGIDO.md (versionado);
 # los .docx son copias para entregar por mail.
 *.docx
 ~$*

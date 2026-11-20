@@ -53,7 +53,7 @@ Comparamos dos baselines sin IA (una regla simple y "siempre la clase más frecu
 
 **Resultado principal:** XGBoost detecta el **98,3 % de los ataques del test** con un F1 de 0,898, contra 0,733 de la regla sin IA. No cumple uno de los cuatro criterios que fijamos de antemano: su tasa de falsos positivos sube de 8 % en la validación a 25 % en el test, por un sesgo del dataset en la variable TTL que analizamos en [Resultados](#-resultados).
 
-La propuesta completa (problema, PEAS, métricas de éxito, baselines y alcance) está en el [Project Charter](PROJECT_CHARTER_CORREGIDO.md), también publicado como Issue #1. El plan de trabajo está en [PLAN_IMPLEMENTACION.md](PLAN_IMPLEMENTACION.md), el análisis detallado de los datos en [AUDITORIA_VIABILIDAD.md](AUDITORIA_VIABILIDAD.md) y un resumen de estudio del proyecto en [RESUMEN_PROYECTO.md](RESUMEN_PROYECTO.md).
+La propuesta completa (problema, PEAS, métricas de éxito, baselines y alcance) está en el [Project Charter](docs/informes/PROJECT_CHARTER_CORREGIDO.md), también publicado como Issue #1. El plan de trabajo está en [PLAN_IMPLEMENTACION.md](docs/informes/PLAN_IMPLEMENTACION.md), el análisis detallado de los datos en [AUDITORIA_VIABILIDAD.md](docs/informes/AUDITORIA_VIABILIDAD.md) y un resumen de estudio del proyecto en [RESUMEN_PROYECTO.md](docs/informes/RESUMEN_PROYECTO.md).
 
 ### Contexto académico
 
@@ -86,7 +86,7 @@ La propuesta completa (problema, PEAS, métricas de éxito, baselines y alcance)
 | Período / cobertura | Tráfico generado en 2015 en el laboratorio Cyber Range de UNSW Canberra, mezclando actividad normal real con ataques sintéticos |
 | Licencia del dataset | Uso libre con fines académicos y de investigación, citando los trabajos de los autores; el uso comercial requiere su acuerdo |
 
-Los datos **no están en el repositorio** por su tamaño. En [data/README.md](data/README.md) explicamos cómo descargarlos de la fuente oficial y cómo comprobar con su hash MD5 que son exactamente los archivos que usamos. Ojo con la copia que hay en Kaggle: tiene los nombres de train y test intercambiados.
+Los datos **no están en el repositorio** por su tamaño. En [data/README.md](data/README.md) explicamos cómo descargarlos de la fuente oficial y cómo comprobar con su hash MD5 que son exactamente los archivos que usamos. Ojo con la copia que hay en Kaggle: tiene los nombres de train y test intercambiados. También hay una copia en Hugging Face, con el mismo problema (ver [data/README.md](data/README.md)).
 
 Elegimos este dataset porque es público, conocido y viene con una división oficial en train y test, así que los resultados se pueden comparar. Además permite armar un baseline sin IA con sentido y tiene problemas reales para analizar: clases que se superponen, un sesgo en el TTL y diferencias entre train y test.
 
@@ -141,7 +141,7 @@ Los hiperparámetros se fijaron antes de entrenar, sin búsqueda, y la semilla e
 
 - **Cross-validation de 5 folds** sobre el train con `StratifiedGroupKFold`: las filas con los mismos valores en las 42 variables forman un grupo y cada grupo cae entero en un fold. Así ninguna fila repetida queda en entrenamiento y en validación a la vez. Cada fold mantiene la proporción de clases del train. Lo cambiamos por recomendación de la cátedra: con un `StratifiedKFold` común, las métricas salían infladas por memorización.
 - **Umbral de decisión (binaria):** con las predicciones out-of-fold elegimos el umbral con mejor F1 entre los que detectan al menos el 90 % de los ataques. Se guarda con el modelo y nunca se recalcula con el test.
-- **Test:** el modelo final se entrena con todo el train y se evalúa **una sola vez** en el test oficial. `evaluate.py` se niega a correr si ese modelo ya fue evaluado.
+- **Test:** el modelo final se entrena con todo el train y se evalúa **una sola vez** en el test oficial. Es una convención que respetamos: `evaluate.py` avisa si ese modelo ya fue evaluado, pero el chequeo se saltea borrando el JSON. Lo que lo garantiza es el proceso: el criterio y el umbral se fijaron antes, y en el historial hay un único commit con la evaluación del test.
 - **Métricas:** priorizamos el recall porque en un NIDS el error más grave es un ataque no detectado, pero controlamos la tasa de falsos positivos, porque un detector que da alarma por todo no sirve. No usamos accuracy como métrica principal porque con clases desbalanceadas engaña. En la multiclase usamos Macro-F1, que pesa igual a todas las clases.
 
 ---
@@ -251,9 +251,6 @@ XGBoost es el mejor modelo en las dos tareas, pero **no cumple el criterio de fa
 ├── pyproject.toml              # dependencias con versiones exactas
 ├── requirements.txt            # todas las dependencias, incluidas las transitivas, fijadas
 ├── LICENSE
-├── AGENTS.md                   # instrucciones de la plantilla de la cátedra
-├── PROJECT_CHARTER_CORREGIDO.md, PLAN_IMPLEMENTACION.md,
-│   AUDITORIA_VIABILIDAD.md, RESUMEN_PROYECTO.md   # documentación del proyecto
 ├── src/
 │   ├── config.py               # semilla, rutas, hashes MD5, columnas e hiperparámetros
 │   ├── data.py                 # verificación y carga de los datos; X / y sin la etiqueta de la otra tarea
@@ -280,6 +277,7 @@ XGBoost es el mejor modelo en las dos tareas, pero **no cumple el criterio de fa
 └── docs/                       # demo estática (GitHub Pages) e imágenes del README
     ├── index.html
     ├── img/
+    ├── informes/               # Charter, plan, auditoría de datos y resumen
     └── assets/
 ```
 
@@ -346,7 +344,7 @@ Entrenar los 6 modelos (3 por tarea) tarda unos 9 minutos en nuestra máquina. C
 
 `inference.py` verifica que el CSV tenga las 42 columnas que espera el modelo (si falta alguna, corta con un error que dice cuáles; si sobran, las ignora con un aviso), aplica el preprocesamiento y el umbral guardados, y escribe un CSV con el `id`, la probabilidad y la etiqueta de cada flujo. La salida esperada es la de la captura de la [Demo](#-demo). En la tarea multiclase devuelve la categoría y su probabilidad.
 
-`evaluate.py` no entrena nada: carga el modelo guardado y calcula las métricas sobre el test. Como las métricas del test ya están en el repositorio, para volver a evaluar hay que borrar antes los `reports/metrics/*_test.json`; si no, se niega a correr, para que el test no se evalúe dos veces sin querer. Con `--split train` se puede probar el script sin tocar el test.
+`evaluate.py` no entrena nada: carga el modelo guardado y calcula las métricas sobre el test. Como las métricas del test ya están en el repositorio, para volver a evaluar hay que borrar antes los `reports/metrics/*_test.json`; si no, avisa y no corre, para que el test no se evalúe dos veces sin querer (es un recordatorio, no una protección). Con `--split train` se puede probar el script sin tocar el test.
 
 Los notebooks se abren con Jupyter (o desde VS Code) usando el kernel del entorno `.venv`. `01_eda_minimo.ipynb` necesita los datos y `02_analisis_test.ipynb` necesita además los modelos entrenados.
 
