@@ -60,21 +60,31 @@ def load_xy(task: str):
     return X, y, encoder
 
 
+def make_groups(X: pd.DataFrame) -> pd.Series:
+    """Asigna el mismo número de grupo a las filas con exactamente la misma X."""
+    return X.groupby(list(X.columns), sort=False, dropna=False).ngroup()
+
+
+def make_folds(X: pd.DataFrame, y: pd.Series, groups: pd.Series) -> list:
+    """Folds estratificados y agrupados: cada grupo de filas idénticas cae entero en un fold."""
+    sgkf = StratifiedGroupKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
+    return list(sgkf.split(X, y, groups))
+
+
 def cross_validate(task: str, model: str):
     """Corre la CV de 5 folds. Devuelve las métricas de cada fold y los scores out-of-fold."""
     X, y, encoder = load_xy(task)
 
     # Filas con exactamente la misma X van al mismo grupo, y cada grupo cae entero en un solo fold.
     # Así ninguna fila repetida está a la vez en entrenamiento y en validación (recomendación de la cátedra).
-    groups = X.groupby(list(X.columns), sort=False, dropna=False).ngroup()
-    sgkf = StratifiedGroupKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
+    groups = make_groups(X)
 
 
     fold_metrics = []
     oof_scores = np.zeros(len(y))     # probabilidad de ataque para cada fila (binaria)
     oof_labels = np.full(len(y), -1, dtype=int)
 
-    for k, (train_idx, val_idx) in enumerate(sgkf.split(X, y, groups), start=1):
+    for k, (train_idx, val_idx) in enumerate(make_folds(X, y, groups), start=1):
         
         assert not set(groups.iloc[train_idx]) & set(groups.iloc[val_idx]), "un grupo quedó en train y validación"
 

@@ -22,6 +22,9 @@ dependencies = [
     "ipykernel==7.4.0",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest==9.2.0"]
+
 [build-system]
 requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
@@ -29,3 +32,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
