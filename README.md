@@ -54,7 +54,7 @@ El sistema recibe los datos de un **flujo de red** (una conexión entre dos equi
 
 Comparamos dos baselines sin IA (una regla simple y "siempre la clase más frecuente") y una regresión logística contra **XGBoost**. Validamos con cross-validation sobre el train, agrupando las filas repetidas, y evaluamos cada modelo **una sola vez** sobre el test oficial.
 
-**Resultado principal:** XGBoost detecta el **98,3 % de los ataques del test** con un F1 de 0,898, contra 0,733 de la regla sin IA. No cumple uno de los cuatro criterios que fijamos de antemano: su tasa de falsos positivos sube de 8 % en la validación a 25 % en el test, por un sesgo del dataset en la variable TTL que analizamos en [Resultados](#-resultados).
+**Resultado principal:** XGBoost detecta el **98,3 % de los ataques del test** con un F1 de 0,898, contra 0,733 de la regla sin IA. No cumple uno de los cuatro criterios que fijamos de antemano: su tasa de falsos positivos sube de 8 % en la validación a 25 % en el test. La causa es un tipo de tráfico normal, marcado por `sttl = 254`, que en el test es el doble de frecuente que en el train. Sacar las variables de TTL no lo resuelve, porque el modelo reconoce ese tráfico también por otras variables. Lo analizamos en [Resultados](#-resultados).
 
 La propuesta completa (problema, PEAS, métricas de éxito, baselines y alcance) está en el [Project Charter](docs/informes/PROJECT_CHARTER_CORREGIDO.md), también publicado como Issue #1. El plan de trabajo está en [PLAN_IMPLEMENTACION.md](docs/informes/PLAN_IMPLEMENTACION.md), el análisis detallado de los datos en [AUDITORIA_VIABILIDAD.md](docs/informes/AUDITORIA_VIABILIDAD.md) y un resumen de estudio del proyecto en [RESUMEN_PROYECTO.md](docs/informes/RESUMEN_PROYECTO.md).
 
@@ -119,7 +119,7 @@ El análisis está en [notebooks/01_eda_minimo.ipynb](notebooks/01_eda_minimo.ip
 - **Desbalance.** 68 % de ataques en el train y 55 % en el test. Entre categorías es mucho más fuerte: Generic tiene 40.000 filas y Worms 130. Lo manejamos con pesos por clase y métricas que no se engañan con el desbalance.
 - **Filas repetidas.** El 38 % de las filas del train está repetida. No las eliminamos, porque son flujos reales que se repiten (por ejemplo, durante un escaneo), pero las tenemos en cuenta al validar.
 - **Filas idénticas con distinta etiqueta.** Cerca del 17 % de las filas del train tiene los mismos valores en las 42 variables que otra fila de otra categoría, sobre todo entre Analysis, Backdoor, DoS y Exploits. Ningún modelo puede separarlas: el Macro-F1 máximo posible en el train ronda 0,81.
-- **Sesgo del TTL.** `sttl`, `dttl` y `ct_state_ttl` separan casi solas el tráfico normal de los ataques, por cómo se generó el tráfico en el laboratorio. No es data leakage (el TTL existe en una red real), pero sí un sesgo del dataset. Las dejamos y lo anotamos como riesgo.
+- **Sesgo del TTL.** `sttl`, `dttl` y `ct_state_ttl` separan casi solas el tráfico normal de los ataques, por cómo se generó el tráfico en el laboratorio. No es data leakage (el TTL existe en una red real), pero sí un sesgo del dataset. En el MVP las dejamos y lo anotamos como riesgo. En el trabajo final probamos sacarlas: el modelo rinde igual y las falsas alarmas del test no bajan (ver [Experimento sin TTL](#experimento-xgboost-sin-las-variables-de-ttl)).
 - **Outliers.** Varias variables tienen valores muy extremos (por ejemplo, `sbytes` llega a casi 13 MB con una mediana de 430 bytes). No los eliminamos: en tráfico de red son legítimos y muchas veces son la señal del ataque.
 - **Train y test.** Alrededor del 5 % de las filas del test también están en el train. Evaluamos sobre el test completo porque es el benchmark oficial.
 
@@ -143,11 +143,13 @@ El análisis está en [notebooks/01_eda_minimo.ipynb](notebooks/01_eda_minimo.ip
 
 Los hiperparámetros se fijaron antes de entrenar, sin búsqueda, y la semilla es 42 en todo el proyecto.
 
+En el trabajo final, el modelo principal pasa a ser **XGBoost sin las tres variables de TTL** (`xgb_sinttl`), con los mismos hiperparámetros. En la cross-validation rinde igual, usa tres variables menos y no depende de la topología de la red donde se capturó el tráfico. La decisión y el resultado están en [Experimento sin TTL](#experimento-xgboost-sin-las-variables-de-ttl).
+
 ### Validación
 
 - **Cross-validation de 5 folds** sobre el train con `StratifiedGroupKFold`: las filas con los mismos valores en las 42 variables forman un grupo y cada grupo cae entero en un fold. Así ninguna fila repetida queda en entrenamiento y en validación a la vez. Cada fold mantiene la proporción de clases del train. Lo cambiamos por recomendación de la cátedra: con un `StratifiedKFold` común, las métricas salían infladas por memorización.
 - **Umbral de decisión (binaria):** con las predicciones out-of-fold elegimos el umbral con mejor F1 entre los que detectan al menos el 90 % de los ataques. Se guarda con el modelo y nunca se recalcula con el test.
-- **Test:** el modelo final se entrena con todo el train y se evalúa **una sola vez** en el test oficial. Es una convención que respetamos: `evaluate.py` avisa si ese modelo ya fue evaluado, pero el chequeo se saltea borrando el JSON. Lo que lo garantiza es el proceso: el criterio y el umbral se fijaron antes, y en el historial hay un único commit con la evaluación del test.
+- **Test:** el modelo final se entrena con todo el train y se evalúa **una sola vez** en el test oficial. Es una convención que respetamos: `evaluate.py` avisa si ese modelo ya fue evaluado, pero el chequeo se saltea borrando el JSON. Lo que lo garantiza es el proceso: el criterio y el umbral se fijaron antes, y en el historial cada evaluación del test tiene un único commit. En el trabajo final evaluamos un modelo más, `xgb_sinttl`. Antes de correrlo dejamos escrita en la [issue #24](https://github.com/agusclap/ml-network-intrusion-detection/issues/24) la decisión de usarlo como modelo principal, y que el resultado del test no la iba a cambiar.
 - **Métricas:** priorizamos el recall porque en un NIDS el error más grave es un ataque no detectado, pero controlamos la tasa de falsos positivos, porque un detector que da alarma por todo no sirve. No usamos accuracy como métrica principal porque con clases desbalanceadas engaña. En la multiclase usamos Macro-F1, que pesa igual a todas las clases.
 
 ---
@@ -226,7 +228,7 @@ Las matrices de confusión y curvas ROC de todos los modelos, en la cross-valida
 
 ### Análisis crítico: por qué aumentan los falsos positivos en el test
 
-XGBoost es el mejor modelo en las dos tareas, pero **no cumple el criterio de falsos positivos**: en la cross-validation tenía 8,0 % y en el test sube a 25,1 %. Casi todas las falsas alarmas vienen de una sola variable, `sttl` (el TTL de los paquetes del origen). Proporción de flujos con cada valor:
+XGBoost es el mejor modelo en las dos tareas, pero **no cumple el criterio de falsos positivos**: en la cross-validation tenía 8,0 % y en el test sube a 25,1 %. Casi todas las falsas alarmas tienen el mismo valor de `sttl` (el TTL de los paquetes del origen). Proporción de flujos con cada valor:
 
 | `sttl` | Normales en train | Ataques en train | Normales en test |
 |---|---|---|---|
@@ -239,7 +241,36 @@ XGBoost es el mejor modelo en las dos tareas, pero **no cumple el criterio de fa
 - El modelo multiclase clasifica como Fuzzers 7.402 de esas falsas alarmas; por eso en el test baja el F1 de Normal y la precisión de Fuzzers es de 0,26.
 - El ROC-AUC sigue en 0,984: el modelo ordena bien los flujos. Lo que falla es el umbral elegido con el train, porque cambió la distribución del tráfico normal.
 
-**No cambiamos el umbral ni el modelo después de ver el test**, porque el resultado dejaría de ser una evaluación independiente. Lo reportamos como está. El análisis completo está en [notebooks/02_analisis_test.ipynb](notebooks/02_analisis_test.ipynb). Para usar el modelo en otra red habría que volver a elegir el umbral con tráfico de esa red o entrenar sin las variables de TTL (ver [Roadmap](#-roadmap)).
+**No cambiamos el umbral ni el modelo después de ver el test**, porque el resultado dejaría de ser una evaluación independiente. Lo reportamos como está. El análisis completo está en [notebooks/02_analisis_test.ipynb](notebooks/02_analisis_test.ipynb). En el MVP pensamos que entrenar sin las variables de TTL podía resolverlo. Lo probamos en el trabajo final y no alcanza (ver la sección siguiente). Para usar el modelo en otra red hay que volver a elegir el umbral con tráfico de esa red (ver [Roadmap](#-roadmap)).
+
+### Experimento: XGBoost sin las variables de TTL
+
+Para medir cuánto depende el modelo del TTL, entrenamos el mismo XGBoost, con los mismos hiperparámetros, sin `sttl`, `dttl` ni `ct_state_ttl`. Las tres columnas se sacan dentro del `Pipeline`, así que el modelo guardado las ignora aunque el CSV las traiga. Los grupos de la cross-validation se arman sin esas columnas: si no, dos flujos que solo difieren en el TTL, y que el modelo ve idénticos, podrían caer uno en entrenamiento y otro en validación.
+
+**Cross-validation (5 folds, train):**
+
+| Modelo | F1 | Recall | Tasa de falsos positivos | ROC-AUC | Al umbral OOF: recall / falsos positivos |
+|---|---|---|---|---|---|
+| XGBoost | 0,965 ± 0,001 | 0,955 ± 0,002 | 0,050 ± 0,002 | 0,993 | 0,974 / 0,080 |
+| XGBoost sin TTL | 0,964 ± 0,001 | 0,954 ± 0,001 | 0,051 ± 0,003 | 0,993 | 0,975 / 0,081 |
+
+En el train rinden igual: todas las diferencias son menores que la variación entre folds. Las otras variables ya traen la información del TTL.
+
+**Decisión, tomada antes de evaluar en el test** y registrada en la [issue #24](https://github.com/agusclap/ml-network-intrusion-detection/issues/24): el modelo principal pasa a ser XGBoost sin TTL. Como en la cross-validation empatan, elegimos por dos razones que no dependen del test. La primera es la parsimonia: rinde lo mismo con tres variables menos. La segunda es el dominio: el TTL depende de cuántos saltos hay en la red donde se capturó el tráfico, no del tipo de ataque, así que un modelo que se apoya en él aprende cómo estaba armado el laboratorio. El test se evaluó una vez solo para medir el efecto, sin posibilidad de cambiar la decisión. Hay una limitación que conviene decir: la sospecha sobre el TTL salió del análisis de errores del test, así que esta evaluación no es del todo ciega.
+
+**Test:**
+
+| Modelo | Recall | Tasa de falsos positivos | Precisión | F1 | ROC-AUC |
+|---|---|---|---|---|---|
+| XGBoost | 0,983 | 0,251 | 0,828 | 0,898 | 0,984 |
+| XGBoost sin TTL | 0,979 | 0,255 | 0,825 | 0,895 | 0,982 |
+
+- **Sacar el TTL no baja las falsas alarmas.** Son 9.421 contra 9.283, y 8.628 de esos flujos son los mismos en los dos modelos.
+- **El 87 % de las falsas alarmas sigue teniendo `sttl = 254`** (8.196 de 9.421), aunque este modelo nunca ve esa columna. El TTL no era la causa: era una marca de un tipo de tráfico normal que se parece a un ataque también en otras variables.
+- En esas falsas alarmas, las variables que más empujan la predicción hacia "ataque" son `ackdat`, `synack` y `tcprtt`. Las tres miden tiempos de ida y vuelta de TCP, así que también dependen de la red y no del ataque. Lo medimos con las contribuciones por variable que calcula XGBoost (`pred_contribs`).
+- El problema de fondo es un **cambio en la distribución del tráfico normal**. Ese tráfico es el 20 % de los flujos normales del train y el 41 % de los del test. Sacar variables no lo corrige: hace falta tráfico normal de la red donde se vaya a usar el modelo, o recalibrar el umbral con ese tráfico.
+
+Las métricas completas están en `reports/metrics/binary_xgb_sinttl_cv.json` y `binary_xgb_sinttl_test.json`.
 
 ### Reproducibilidad
 
@@ -340,6 +371,7 @@ Todos los comandos se corren desde la raíz del repositorio, con el entorno acti
 # Cross-validation, elección del umbral y entrenamiento del modelo final (guarda models/*.joblib)
 python -m src.train --model xgb                       # tarea binaria (también: heuristic, lr)
 python -m src.train --task multiclass --model xgb     # tarea multiclase
+python -m src.train --model xgb_sinttl                # binaria sin las variables de TTL (trabajo final)
 
 # Evaluación final sobre el test, con los modelos ya entrenados
 python -m src.evaluate --task binary --model xgb      # también: heuristic, lr
@@ -389,7 +421,7 @@ Comprueban que `get_X_y` no deje pasar `id` ni las etiquetas a la entrada, que l
 
 ## 🗺️ Roadmap
 
-- [ ] Entrenar sin las variables de TTL (`sttl`, `dttl`, `ct_state_ttl`) para medir cuánto dependen los modelos de ese sesgo y si se vuelven más robustos en el test.
+- [x] Entrenar sin las variables de TTL (`sttl`, `dttl`, `ct_state_ttl`) para medir cuánto dependen los modelos de ese sesgo. Rinde igual y no baja las falsas alarmas del test: el problema es un cambio en el tráfico normal, no esas variables (ver [Experimento sin TTL](#experimento-xgboost-sin-las-variables-de-ttl)).
 - [ ] Evaluar sobre la parte del test que no aparece en el train, y recalibrar el umbral con tráfico de la red donde se vaya a usar.
 - [ ] Probar unas pocas configuraciones de XGBoost con cross-validation y analizar qué variables pesan más en las predicciones.
 - [x] Tests automáticos con pytest y GitHub Actions sobre la separación de X / y, la agrupación de la CV, la elección del umbral y la validación de `inference.py`.

@@ -2,7 +2,7 @@
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from src.config import CATEGORICAL_COLS
+from src.config import CATEGORICAL_COLS, TTL_COLS
 
 
 def build_preprocessor(model: str) -> ColumnTransformer:
@@ -24,6 +24,10 @@ def build_preprocessor(model: str) -> ColumnTransformer:
         ("cat", categorical_step, CATEGORICAL_COLS),
         ("num", numeric_step, make_column_selector(dtype_include="number")),
     ])
+
+def drop_ttl(X):
+    """Saca las variables de TTL. Es una función con nombre, y no una lambda, para que joblib la pueda guardar."""
+    return X.drop(columns=TTL_COLS)
 
 
 if __name__ == "__main__":
