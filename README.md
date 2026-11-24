@@ -40,6 +40,8 @@ El MVP es un script de consola: recibe un CSV con flujos de red, les aplica el m
 
 ![Salida real de inference.py clasificando 20 flujos](docs/img/demo_inferencia.png)
 
+También hay una **demo interactiva con Streamlit** ([streamlit_app.py](streamlit_app.py)): subís un CSV con flujos, elegís la tarea (binaria o multiclase) y la app muestra la predicción de cada flujo, un gráfico con el conteo por clase y un botón para descargar el resultado. Si el CSV trae las etiquetas reales, además muestra cuántos flujos acertó. Trae 17 flujos de ejemplo del test (8 normales y uno de cada tipo de ataque) para probarla sin subir nada. Cómo correrla, con Python o con Docker, está en [Uso](#demo-interactiva).
+
 **🔗 Demo en vivo:** https://agusclap.github.io/ml-network-intrusion-detection/ (página con el resumen del proyecto y los resultados).
 
 ---
@@ -72,6 +74,8 @@ La propuesta completa (problema, PEAS, métricas de éxito, baselines y alcance)
 - [XGBoost](https://xgboost.readthedocs.io/) — modelo principal
 - [matplotlib](https://matplotlib.org/) — matrices de confusión y curvas ROC
 - [Jupyter](https://jupyter.org/) — análisis exploratorio y análisis de errores
+- [Streamlit](https://streamlit.io/) — demo interactiva
+- [Docker](https://www.docker.com/) — para correr la demo sin instalar Python
 - [uv](https://docs.astral.sh/uv/) — gestión de dependencias y entorno
 - [pytest](https://docs.pytest.org/) y GitHub Actions — tests automáticos en cada cambio
 
@@ -253,6 +257,9 @@ XGBoost es el mejor modelo en las dos tareas, pero **no cumple el criterio de fa
 ├── pyproject.toml              # dependencias con versiones exactas
 ├── requirements.txt            # todas las dependencias, incluidas las transitivas, fijadas
 ├── LICENSE
+├── streamlit_app.py            # demo interactiva: clasifica un CSV subido desde el navegador
+├── Dockerfile                  # imagen de la demo (Python 3.13 + dependencias + modelos XGBoost)
+├── .dockerignore               # deja afuera de la imagen los datos, el entorno y los notebooks
 ├── src/
 │   ├── config.py               # semilla, rutas, hashes MD5, columnas e hiperparámetros
 │   ├── data.py                 # verificación y carga de los datos; X / y sin la etiqueta de la otra tarea
@@ -270,11 +277,11 @@ XGBoost es el mejor modelo en las dos tareas, pero **no cumple el criterio de fa
 │   ├── README.md               # cómo descargar y verificar los datos
 │   ├── raw/                    # los dos CSV oficiales (no se suben)
 │   └── processed/              # vacía: el preprocesamiento va dentro del Pipeline del modelo
-├── models/                     # modelos entrenados (no se suben, se generan con train.py)
+├── models/                     # modelos entrenados: solo se suben los dos XGBoost (para la demo); el resto se genera con train.py
 ├── reports/
 │   ├── metrics/                # métricas en JSON (*_cv.json y *_test.json)
 │   └── figures/                # matrices de confusión y curvas ROC
-├── examples/                   # CSV de ejemplo para probar inference.py
+├── examples/                   # CSV de ejemplo: 20 flujos sin etiquetas y 17 del test con etiquetas (para la demo)
 ├── tests/                      # tests con pytest sobre datos sintéticos (corren en GitHub Actions)
 ├── .github/workflows/          # CI: corre los tests en cada push a main y en cada PR
 └── docs/                       # demo estática (GitHub Pages) e imágenes del README
@@ -351,6 +358,22 @@ Entrenar los 6 modelos (3 por tarea) tarda unos 9 minutos en nuestra máquina. C
 
 Los notebooks se abren con Jupyter (o desde VS Code) usando el kernel del entorno `.venv`. `01_eda_minimo.ipynb` necesita los datos y `02_analisis_test.ipynb` necesita además los modelos entrenados.
 
+### Demo interactiva
+
+La demo usa los dos modelos XGBoost que ya están en `models/`, así que no hace falta descargar los datos ni entrenar. Se puede correr con Python o con Docker, y en los dos casos queda en http://localhost:8501.
+
+```bash
+# Con Python, con el entorno activado
+streamlit run streamlit_app.py
+
+# Con Docker, sin instalar Python ni dependencias
+docker build -t nids-demo .
+docker run --rm -p 8501:8501 nids-demo
+```
+
+El CSV tiene que traer las 42 variables de UNSW-NB15. Si le falta alguna, la app avisa cuáles en vez de cortar. Si trae `label` (binaria) o `attack_cat` (multiclase), compara la predicción con la etiqueta real y muestra el porcentaje de aciertos. Con los 17 flujos de ejemplo, la tarea binaria acierta 15 (88 %): detecta los 9 ataques y marca como ataque 2 de los 8 flujos normales, que tienen `sttl = 254`. Por eso la tabla muestra también esa columna, para ver el sesgo del TTL que explicamos en [Resultados](#-resultados).
+
+
 ### Tests
 
 Los tests usan datos sintéticos chicos, así que no necesitan el dataset ni los modelos entrenados. Se instalan con el grupo de dependencias `dev` y se corren con pytest:
@@ -370,7 +393,7 @@ Comprueban que `get_X_y` no deje pasar `id` ni las etiquetas a la entrada, que l
 - [ ] Evaluar sobre la parte del test que no aparece en el train, y recalibrar el umbral con tráfico de la red donde se vaya a usar.
 - [ ] Probar unas pocas configuraciones de XGBoost con cross-validation y analizar qué variables pesan más en las predicciones.
 - [x] Tests automáticos con pytest y GitHub Actions sobre la separación de X / y, la agrupación de la CV, la elección del umbral y la validación de `inference.py`.
-- [ ] Una demo interactiva que clasifique un CSV subido por el usuario.
+- [x] Una demo interactiva con Streamlit que clasifique un CSV subido por el usuario, empaquetada con Docker.
 
 ---
 

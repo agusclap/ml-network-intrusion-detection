@@ -30,6 +30,9 @@ data/processed/*
 # --- Artefactos generados (se regeneran con python -m src.train) ------
 models/*
 !models/.gitkeep
+# Los dos XGBoost se versionan para la demo publicada (1,3 y 10,9 MB); el resto se regenera con train.py
+!models/binary_xgb.joblib
+!models/multiclass_xgb.joblib
 # reports/metrics/*.json y reports/figures/*.png SÍ se versionan
 # (trazabilidad de experimentos); solo se ignoran temporales.
 reports/**/tmp/
