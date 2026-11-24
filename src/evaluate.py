@@ -54,7 +54,7 @@ def evaluate(task: str, model: str, split: str = "test") -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", choices=["binary", "multiclass"], required=True)
-    parser.add_argument("--model", choices=["heuristic", "lr", "xgb"], required=True)
+    parser.add_argument("--model", choices=["heuristic", "lr", "xgb", "xgb_sinttl"], required=True)
     parser.add_argument("--split", choices=["train", "test"], default="test")
     args = parser.parse_args()
     evaluate(args.task, args.model, args.split)

@@ -28,6 +28,8 @@ ID_COL = "id"                       # índice de fila: nunca se usa como variabl
 BINARY_TARGET = "label"             # 0 = normal, 1 = ataque
 MULTICLASS_TARGET = "attack_cat"    # Normal + 9 categorías de ataque
 CATEGORICAL_COLS = ["proto", "service", "state"]
+# Variables derivadas del TTL. El modelo xgb_sinttl las saca para medir cuánto depende del sesgo del dataset.
+TTL_COLS = ["sttl", "dttl", "ct_state_ttl"]
 # Las columnas numéricas no se listan a mano: son todas las que quedan
 # después de sacar el id, los dos targets y las categóricas (se calculan en data.py).
 

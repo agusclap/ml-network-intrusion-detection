@@ -62,7 +62,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Predicción de flujos de red con un modelo entrenado")
     parser.add_argument("--input", required=True, help="CSV con los flujos a clasificar")
     parser.add_argument("--task", choices=["binary", "multiclass"], default="binary")
-    parser.add_argument("--model", choices=["heuristic", "lr", "xgb"], default="xgb")
+    parser.add_argument("--model", choices=["heuristic", "lr", "xgb", "xgb_sinttl"], default="xgb")
     parser.add_argument("--output", default="predicciones.csv")
     args = parser.parse_args()
 

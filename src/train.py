@@ -17,9 +17,10 @@ from src.metrics import select_binary_threshold
 from src.baselines import make_baseline
 from src.config import LR_PARAMS, SEED, XGB_PARAMS
 from src.data import get_X_y, load_split
-from src.features import build_preprocessor
 from src.metrics import compute_metrics
 from src.plots import save_confusion_matrix, save_roc_curve
+from sklearn.preprocessing import FunctionTransformer
+from src.features import build_preprocessor, drop_ttl
 
 N_FOLDS = 5
 
@@ -30,19 +31,20 @@ def build_model(task: str, model: str):
         return make_baseline(task)            # recibe X crudo: no lleva preprocesador
     if model == "lr":
         estimator = LogisticRegression(**LR_PARAMS)
-    elif model == "xgb":
+    elif model in ("xgb", "xgb_sinttl"):
         estimator = XGBClassifier(**XGB_PARAMS)
     else:
-        raise ValueError(f"model debe ser 'heuristic', 'lr' o 'xgb', no {model!r}")
-    return Pipeline([
-        ("prep", build_preprocessor(model)),
-        ("model", estimator),
-    ])
+        raise ValueError(f"model debe ser 'heuristic', 'lr', 'xgb' o 'xgb_sinttl', no {model!r}")
+    steps = [("prep", build_preprocessor("xgb" if model == "xgb_sinttl" else model)),
+             ("model", estimator)]
+    if model == "xgb_sinttl":
+        steps.insert(0, ("sin_ttl", FunctionTransformer(drop_ttl)))   # primer paso: sacar el TTL
+    return Pipeline(steps)
 
 
 def fit_model(clf, model: str, X, y):
     """Entrena el modelo. XGBoost recibe pesos por clase calculados con el mismo y que se usa para entrenar."""
-    if model == "xgb":
+    if model in ("xgb", "xgb_sinttl"):
         weights = compute_sample_weight("balanced", y)
         clf.fit(X, y, model__sample_weight=weights)
     else:
@@ -77,8 +79,7 @@ def cross_validate(task: str, model: str):
 
     # Filas con exactamente la misma X van al mismo grupo, y cada grupo cae entero en un solo fold.
     # Así ninguna fila repetida está a la vez en entrenamiento y en validación (recomendación de la cátedra).
-    groups = make_groups(X)
-
+    groups = make_groups(drop_ttl(X) if model == "xgb_sinttl" else X)
 
     fold_metrics = []
     oof_scores = np.zeros(len(y))     # probabilidad de ataque para cada fila (binaria)
@@ -183,6 +184,6 @@ def run(task: str, model: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cross-validation y entrenamiento final")
     parser.add_argument("--task", choices=["binary", "multiclass"], default="binary")
-    parser.add_argument("--model", choices=["heuristic", "lr", "xgb"], required=True)
+    parser.add_argument("--model", choices=["heuristic", "lr", "xgb", "xgb_sinttl"], required=True)
     args = parser.parse_args()
     run(args.task, args.model)
