@@ -6,6 +6,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![tests](https://github.com/agusclap/ml-network-intrusion-detection/actions/workflows/tests.yml/badge.svg)](https://github.com/agusclap/ml-network-intrusion-detection/actions/workflows/tests.yml)
 [![Status](https://img.shields.io/badge/status-MVP-orange.svg)]()
 
 [Demo en vivo](https://agusclap.github.io/ml-network-intrusion-detection/) · [Reportar un bug](../../issues) · [Pedir una funcionalidad](../../issues)
@@ -72,6 +73,7 @@ La propuesta completa (problema, PEAS, métricas de éxito, baselines y alcance)
 - [matplotlib](https://matplotlib.org/) — matrices de confusión y curvas ROC
 - [Jupyter](https://jupyter.org/) — análisis exploratorio y análisis de errores
 - [uv](https://docs.astral.sh/uv/) — gestión de dependencias y entorno
+- [pytest](https://docs.pytest.org/) y GitHub Actions — tests automáticos en cada cambio
 
 ---
 
@@ -273,7 +275,8 @@ XGBoost es el mejor modelo en las dos tareas, pero **no cumple el criterio de fa
 │   ├── metrics/                # métricas en JSON (*_cv.json y *_test.json)
 │   └── figures/                # matrices de confusión y curvas ROC
 ├── examples/                   # CSV de ejemplo para probar inference.py
-├── tests/                      # vacía: no hay tests automáticos (ver Roadmap)
+├── tests/                      # tests con pytest sobre datos sintéticos (corren en GitHub Actions)
+├── .github/workflows/          # CI: corre los tests en cada push a main y en cada PR
 └── docs/                       # demo estática (GitHub Pages) e imágenes del README
     ├── index.html
     ├── img/
@@ -348,6 +351,17 @@ Entrenar los 6 modelos (3 por tarea) tarda unos 9 minutos en nuestra máquina. C
 
 Los notebooks se abren con Jupyter (o desde VS Code) usando el kernel del entorno `.venv`. `01_eda_minimo.ipynb` necesita los datos y `02_analisis_test.ipynb` necesita además los modelos entrenados.
 
+### Tests
+
+Los tests usan datos sintéticos chicos, así que no necesitan el dataset ni los modelos entrenados. Se instalan con el grupo de dependencias `dev` y se corren con pytest:
+
+```bash
+uv pip install -e ".[dev]"     # o: pip install -e ".[dev]"
+pytest -v
+```
+
+Comprueban que `get_X_y` no deje pasar `id` ni las etiquetas a la entrada, que las filas idénticas caigan en el mismo grupo y que ningún grupo quede en entrenamiento y validación a la vez, que el umbral elegido cumpla el recall mínimo, y que `validate_input` rechace un CSV al que le falta una columna. GitHub Actions los corre en cada push a `main` y en cada pull request ([.github/workflows/tests.yml](.github/workflows/tests.yml)).
+
 ---
 
 ## 🗺️ Roadmap
@@ -355,7 +369,8 @@ Los notebooks se abren con Jupyter (o desde VS Code) usando el kernel del entorn
 - [ ] Entrenar sin las variables de TTL (`sttl`, `dttl`, `ct_state_ttl`) para medir cuánto dependen los modelos de ese sesgo y si se vuelven más robustos en el test.
 - [ ] Evaluar sobre la parte del test que no aparece en el train, y recalibrar el umbral con tráfico de la red donde se vaya a usar.
 - [ ] Probar unas pocas configuraciones de XGBoost con cross-validation y analizar qué variables pesan más en las predicciones.
-- [ ] Sumar tests automáticos de la carga de datos y de `inference.py`, y una demo interactiva que clasifique un CSV subido por el usuario.
+- [x] Tests automáticos con pytest y GitHub Actions sobre la separación de X / y, la agrupación de la CV, la elección del umbral y la validación de `inference.py`.
+- [ ] Una demo interactiva que clasifique un CSV subido por el usuario.
 
 ---
 
