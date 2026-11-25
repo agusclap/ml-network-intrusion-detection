@@ -141,7 +141,7 @@ El análisis está en [notebooks/01_eda_minimo.ipynb](notebooks/01_eda_minimo.ip
 | Regresión logística (L2, `C = 1`, pesos por clase) | Baseline de ML | Es un modelo lineal simple e interpretable: si XGBoost no le gana, la complejidad extra no se justifica. |
 | **XGBoost** (400 árboles, profundidad 6, tasa 0,1) | Modelo principal | Funciona muy bien con datos tabulares y variables heterogéneas, combina condiciones sobre varias variables y no necesita escalado. |
 
-Los hiperparámetros se fijaron antes de entrenar, sin búsqueda, y la semilla es 42 en todo el proyecto.
+En el MVP, los hiperparámetros se fijaron antes de entrenar, sin búsqueda. En el trabajo final los comparamos con una búsqueda en grilla con cross-validation, y los del MVP se mantienen porque ninguna configuración los mejora al umbral con el que funciona el modelo (ver [Búsqueda de hiperparámetros](#búsqueda-de-hiperparámetros)). La semilla es 42 en todo el proyecto.
 
 En el trabajo final, el modelo principal pasa a ser **XGBoost sin las tres variables de TTL** (`xgb_sinttl`), con los mismos hiperparámetros. En la cross-validation rinde igual, usa tres variables menos y no depende de la topología de la red donde se capturó el tráfico. La decisión y el resultado están en [Experimento sin TTL](#experimento-xgboost-sin-las-variables-de-ttl).
 
@@ -272,6 +272,53 @@ En el train rinden igual: todas las diferencias son menores que la variación en
 
 Las métricas completas están en `reports/metrics/binary_xgb_sinttl_cv.json` y `binary_xgb_sinttl_test.json`.
 
+### Búsqueda de hiperparámetros
+
+Es la mejora propia del trabajo final ([issue #28](https://github.com/agusclap/ml-network-intrusion-detection/issues/28)). Los hiperparámetros del MVP se habían fijado a mano. Acá los elegimos con la misma cross-validation agrupada de 5 folds sobre el train, sin usar el test, que es lo que indica la teoría: si se eligen mirando el conjunto de evaluación, el modelo termina ajustado a ese conjunto. La búsqueda se hizo sobre XGBoost sin TTL, el modelo principal.
+
+**Lo que fijamos antes de correr**, registrado en la issue:
+
+| Hiperparámetro | Valores | Qué controla |
+|---|---|---|
+| `max_depth` | 4, **6**, 8 | Complejidad: árboles más profundos tienen menos sesgo y más varianza |
+| `learning_rate` | 0.05, **0.1**, 0.2 | La tasa de aprendizaje: cuánto corrige cada árbol a los anteriores |
+| `min_child_weight` | **1**, 10 | Regularización: no deja crear hojas con pocas filas |
+
+Son 18 configuraciones, con 400 árboles fijos. En negrita está la configuración del MVP, que entra como referencia. La métrica es el F1 promedio de los 5 folds. La regla: se elige la de mayor F1, salvo que la diferencia con la actual sea menor que el desvío entre folds, en cuyo caso se mantiene la actual. Usamos una grilla chica y una regla de empate porque, al elegir la mejor entre muchas configuraciones, se elige en parte la que tuvo más suerte con el ruido de la CV, y su F1 sale optimista.
+
+**Resultado** (las 18 configuraciones están en `reports/metrics/binary_xgb_sinttl_tuning.json`):
+
+| `max_depth` | `learning_rate` | `min_child_weight` | F1 (umbral 0,5) | Tasa de falsos positivos (umbral 0,5) |
+|---|---|---|---|---|
+| 8 | 0.2 | 1 | **0,9665 ± 0,0013** | 0,066 |
+| 8 | 0.1 | 1 | 0,9665 ± 0,0010 | 0,057 |
+| 6 | 0.2 | 1 | 0,9654 ± 0,0016 | 0,058 |
+| 6 | 0.1 | 1 (MVP) | 0,9645 ± 0,0014 | 0,051 |
+| 4 | 0.05 | 10 | 0,9572 ± 0,0015 | 0,049 |
+
+La regla eligió (8, 0.2, 1): mejora el F1 en 0,0020, más que el desvío entre folds. Prácticamente empata con (8, 0.1, 1), por una diferencia de 0,000006. Con más profundidad y más tasa de aprendizaje, sube el F1 y también la tasa de falsos positivos.
+
+**La corrección, hecha antes de tocar el test.** Antes de evaluar, entrenamos la configuración elegida (`xgb_tuned`) con el mismo proceso que el modelo final y comparamos al umbral OOF, que es con el que clasifica el sistema:
+
+| Cross-validation | MVP (6, 0.1, 1) | Elegida (8, 0.2, 1) |
+|---|---|---|
+| F1 al umbral 0,5 (la métrica de la búsqueda) | 0,9645 | **0,9665** |
+| ROC-AUC | **0,9933** | 0,9931 |
+| F1 al umbral OOF | **0,9685** | 0,9678 |
+| Tasa de falsos positivos al umbral OOF | **0,081** | 0,089 |
+| Recall al umbral OOF | 0,975 | **0,977** |
+
+Al umbral real, la configuración elegida no mejora: tiene un F1 un poco menor y más falsas alarmas. El ROC-AUC es el mismo, así que el modelo más profundo no separa mejor los ataques del tráfico normal. Lo que hace es correr sus probabilidades hacia arriba, y eso le da más recall con el umbral fijo en 0,5. Cuando el umbral se vuelve a elegir, esa ventaja desaparece. El error estuvo en la métrica de selección: medía el modelo con un umbral que el sistema no usa.
+
+**Decisión**, registrada en la issue antes de evaluar: se mantienen los hiperparámetros del MVP. El modelo final sigue siendo `xgb_sinttl`, que es equivalente y más simple, y `xgb_tuned` no se evalúa en el test. La regla previa existe para proteger el test, y el test no se tocó. El cambio corrige qué se mide, y lleva al modelo más simple.
+
+**Conclusiones:**
+- Los hiperparámetros del MVP ya estaban cerca del óptimo de esta grilla.
+- Una mejora de F1 con el umbral fijo puede ser solo un corrimiento de las probabilidades. Para comparar modelos que después eligen su propio umbral, hay que medirlos a ese umbral o con una métrica que no dependa de él, como el ROC-AUC.
+- **Limitación:** al umbral OOF solo comparamos la configuración elegida y la del MVP, no las 18. Repetir la búsqueda con esa métrica queda en el [Roadmap](#-roadmap).
+
+La CV de `xgb_tuned` está en `reports/metrics/binary_xgb_tuned_cv.json`.
+
 ### Reproducibilidad
 
 - Los datos se verifican con su MD5 antes de usarlos, la semilla es 42 en todo el proyecto y las versiones de las librerías están fijas en `pyproject.toml` y `requirements.txt`.
@@ -298,6 +345,7 @@ Las métricas completas están en `reports/metrics/binary_xgb_sinttl_cv.json` y 
 │   ├── baselines.py            # regla sin IA y clase mayoritaria
 │   ├── metrics.py              # métricas y elección del umbral
 │   ├── train.py                # cross-validation, umbral y entrenamiento del modelo final
+│   ├── tune.py                 # búsqueda de hiperparámetros de XGBoost con la misma CV (no toca el test)
 │   ├── evaluate.py             # evaluación única de los modelos guardados sobre el test
 │   ├── plots.py                # matrices de confusión y curvas ROC
 │   └── inference.py            # el MVP: clasifica un CSV de flujos con un modelo guardado
@@ -373,6 +421,10 @@ python -m src.train --model xgb                       # tarea binaria (también:
 python -m src.train --task multiclass --model xgb     # tarea multiclase
 python -m src.train --model xgb_sinttl                # binaria sin las variables de TTL (trabajo final)
 
+# Búsqueda de hiperparámetros: 18 configuraciones con CV, unos 10 minutos (trabajo final)
+python -m src.tune
+python -m src.train --model xgb_tuned                 # CV y umbral de la configuración que eligió la búsqueda
+
 # Evaluación final sobre el test, con los modelos ya entrenados
 python -m src.evaluate --task binary --model xgb      # también: heuristic, lr
 python -m src.evaluate --task multiclass --model xgb
@@ -423,7 +475,9 @@ Comprueban que `get_X_y` no deje pasar `id` ni las etiquetas a la entrada, que l
 
 - [x] Entrenar sin las variables de TTL (`sttl`, `dttl`, `ct_state_ttl`) para medir cuánto dependen los modelos de ese sesgo. Rinde igual y no baja las falsas alarmas del test: el problema es un cambio en el tráfico normal, no esas variables (ver [Experimento sin TTL](#experimento-xgboost-sin-las-variables-de-ttl)).
 - [ ] Evaluar sobre la parte del test que no aparece en el train, y recalibrar el umbral con tráfico de la red donde se vaya a usar.
-- [ ] Probar unas pocas configuraciones de XGBoost con cross-validation y analizar qué variables pesan más en las predicciones.
+- [x] Búsqueda de hiperparámetros de XGBoost con cross-validation (18 configuraciones). Los del MVP se mantienen: al umbral OOF ninguna los mejora (ver [Búsqueda de hiperparámetros](#búsqueda-de-hiperparámetros)).
+- [ ] Repetir la búsqueda midiendo cada configuración a su umbral OOF, o con ROC-AUC, en vez del F1 al umbral 0,5.
+- [ ] Analizar qué variables pesan más en las predicciones.
 - [x] Tests automáticos con pytest y GitHub Actions sobre la separación de X / y, la agrupación de la CV, la elección del umbral y la validación de `inference.py`.
 - [x] Una demo interactiva con Streamlit que clasifique un CSV subido por el usuario, empaquetada con Docker.
 

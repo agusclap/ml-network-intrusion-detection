@@ -1,0 +1,192 @@
+{
+  "model": "xgb_sinttl",
+  "n_folds": 5,
+  "seed": 42,
+  "grid": {
+    "max_depth": [
+      4,
+      6,
+      8
+    ],
+    "learning_rate": [
+      0.05,
+      0.1,
+      0.2
+    ],
+    "min_child_weight": [
+      1,
+      10
+    ]
+  },
+  "metric": "f1_mean",
+  "results": [
+    {
+      "max_depth": 8,
+      "learning_rate": 0.2,
+      "min_child_weight": 1,
+      "f1_mean": 0.9665231326832826,
+      "f1_std": 0.001319415333682416,
+      "fpr_mean": 0.0662498806240595,
+      "fpr_std": 0.00393036351561935
+    },
+    {
+      "max_depth": 8,
+      "learning_rate": 0.1,
+      "min_child_weight": 1,
+      "f1_mean": 0.966516932033449,
+      "f1_std": 0.0010012619330498353,
+      "fpr_mean": 0.057339204578312264,
+      "fpr_std": 0.0028664134414853443
+    },
+    {
+      "max_depth": 6,
+      "learning_rate": 0.2,
+      "min_child_weight": 1,
+      "f1_mean": 0.9654298167015323,
+      "f1_std": 0.00157940677150404,
+      "fpr_mean": 0.057553455216636504,
+      "fpr_std": 0.003596180970804627
+    },
+    {
+      "max_depth": 8,
+      "learning_rate": 0.05,
+      "min_child_weight": 1,
+      "f1_mean": 0.9647941313830819,
+      "f1_std": 0.0009544664897256964,
+      "fpr_mean": 0.050339209341688076,
+      "fpr_std": 0.0023440256861217857
+    },
+    {
+      "max_depth": 8,
+      "learning_rate": 0.2,
+      "min_child_weight": 10,
+      "f1_mean": 0.9647021321522485,
+      "f1_std": 0.0012629841862714496,
+      "fpr_mean": 0.06030345363264074,
+      "fpr_std": 0.003015322685904958
+    },
+    {
+      "max_depth": 8,
+      "learning_rate": 0.1,
+      "min_child_weight": 10,
+      "f1_mean": 0.9645472808600509,
+      "f1_std": 0.0015723330901978739,
+      "fpr_mean": 0.05341060284313413,
+      "fpr_std": 0.0032182100312187823
+    },
+    {
+      "max_depth": 6,
+      "learning_rate": 0.1,
+      "min_child_weight": 1,
+      "f1_mean": 0.9644841951834675,
+      "f1_std": 0.001421446400969709,
+      "fpr_mean": 0.051214150350052445,
+      "fpr_std": 0.0033552870690840915
+    },
+    {
+      "max_depth": 6,
+      "learning_rate": 0.2,
+      "min_child_weight": 10,
+      "f1_mean": 0.9642900554281884,
+      "f1_std": 0.00142305194222328,
+      "fpr_mean": 0.05557128684587283,
+      "fpr_std": 0.0028244686776050386
+    },
+    {
+      "max_depth": 8,
+      "learning_rate": 0.05,
+      "min_child_weight": 10,
+      "f1_mean": 0.9630461741743703,
+      "f1_std": 0.0012575701893213856,
+      "fpr_mean": 0.04837487738318165,
+      "fpr_std": 0.0028637383019243278
+    },
+    {
+      "max_depth": 6,
+      "learning_rate": 0.1,
+      "min_child_weight": 10,
+      "f1_mean": 0.9628899585894792,
+      "f1_std": 0.001298842496975484,
+      "fpr_mean": 0.0500177090226676,
+      "fpr_std": 0.0028509114219469754
+    },
+    {
+      "max_depth": 4,
+      "learning_rate": 0.2,
+      "min_child_weight": 1,
+      "f1_mean": 0.9627065331284452,
+      "f1_std": 0.0012814710401318913,
+      "fpr_mean": 0.04958915513193455,
+      "fpr_std": 0.003213576942151519
+    },
+    {
+      "max_depth": 6,
+      "learning_rate": 0.05,
+      "min_child_weight": 1,
+      "f1_mean": 0.9623104902304622,
+      "f1_std": 0.0009980444758081962,
+      "fpr_mean": 0.046428471131188837,
+      "fpr_std": 0.003006709047564033
+    },
+    {
+      "max_depth": 4,
+      "learning_rate": 0.2,
+      "min_child_weight": 10,
+      "f1_mean": 0.9622258440036576,
+      "f1_std": 0.0015204121807827046,
+      "fpr_mean": 0.0500712772650259,
+      "fpr_std": 0.003393608945365142
+    },
+    {
+      "max_depth": 6,
+      "learning_rate": 0.05,
+      "min_child_weight": 10,
+      "f1_mean": 0.9615495808438901,
+      "f1_std": 0.001073377000280694,
+      "fpr_mean": 0.0471070234282459,
+      "fpr_std": 0.002584706881280313
+    },
+    {
+      "max_depth": 4,
+      "learning_rate": 0.1,
+      "min_child_weight": 1,
+      "f1_mean": 0.9607118396999969,
+      "f1_std": 0.0015152946113449574,
+      "fpr_mean": 0.04655344402987098,
+      "fpr_std": 0.003381882560615688
+    },
+    {
+      "max_depth": 4,
+      "learning_rate": 0.1,
+      "min_child_weight": 10,
+      "f1_mean": 0.9602339127795647,
+      "f1_std": 0.0015396728773064592,
+      "fpr_mean": 0.04821413918720273,
+      "fpr_std": 0.0033208537055161923
+    },
+    {
+      "max_depth": 4,
+      "learning_rate": 0.05,
+      "min_child_weight": 1,
+      "f1_mean": 0.9573184463064841,
+      "f1_std": 0.0014763041266890667,
+      "fpr_mean": 0.04835699792202759,
+      "fpr_std": 0.003137070313951076
+    },
+    {
+      "max_depth": 4,
+      "learning_rate": 0.05,
+      "min_child_weight": 10,
+      "f1_mean": 0.9572022575017243,
+      "f1_std": 0.001521377698141998,
+      "fpr_mean": 0.04876770423993136,
+      "fpr_std": 0.0032924779398261555
+    }
+  ],
+  "chosen": {
+    "max_depth": 8,
+    "learning_rate": 0.2,
+    "min_child_weight": 1
+  },
+  "reason": "la mejora supera el desvío entre folds"
+}
