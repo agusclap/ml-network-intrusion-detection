@@ -118,7 +118,7 @@ El análisis está en [notebooks/01_eda_minimo.ipynb](notebooks/01_eda_minimo.ip
 - **No hay valores faltantes.** Algunos valores de `state` aparecen solo en el test, así que el encoding tiene que soportar categorías nuevas.
 - **Desbalance.** 68 % de ataques en el train y 55 % en el test. Entre categorías es mucho más fuerte: Generic tiene 40.000 filas y Worms 130. Lo manejamos con pesos por clase y métricas que no se engañan con el desbalance.
 - **Filas repetidas.** El 38 % de las filas del train está repetida. No las eliminamos, porque son flujos reales que se repiten (por ejemplo, durante un escaneo), pero las tenemos en cuenta al validar.
-- **Filas idénticas con distinta etiqueta.** Cerca del 17 % de las filas del train tiene los mismos valores en las 42 variables que otra fila de otra categoría, sobre todo entre Analysis, Backdoor, DoS y Exploits. Ningún modelo puede separarlas: el Macro-F1 máximo posible en el train ronda 0,81.
+- **Filas idénticas con distinta etiqueta.** Cerca del 17 % de las filas del train tiene los mismos valores en las 42 variables que otra fila de otra categoría, sobre todo entre Analysis, Backdoor, DoS y Exploits. Ningún modelo puede separarlas: el Macro-F1 máximo posible en el train es 0,80. Por eso no fusionamos clases y la binaria queda como tarea principal (ver [Tarea multiclase](#tarea-multiclase-por-qué-no-fusionamos-clases)).
 - **Sesgo del TTL.** `sttl`, `dttl` y `ct_state_ttl` separan casi solas el tráfico normal de los ataques, por cómo se generó el tráfico en el laboratorio. No es data leakage (el TTL existe en una red real), pero sí un sesgo del dataset. En el MVP las dejamos y lo anotamos como riesgo. En el trabajo final probamos sacarlas: el modelo rinde igual y las falsas alarmas del test no bajan (ver [Experimento sin TTL](#experimento-xgboost-sin-las-variables-de-ttl)).
 - **Outliers.** Varias variables tienen valores muy extremos (por ejemplo, `sbytes` llega a casi 13 MB con una mediana de 430 bytes). No los eliminamos: en tráfico de red son legítimos y muchas veces son la señal del ataque.
 - **Train y test.** Alrededor del 5 % de las filas del test también están en el train. Evaluamos sobre el test completo porque es el benchmark oficial.
@@ -319,6 +319,36 @@ Al umbral real, la configuración elegida no mejora: tiene un F1 un poco menor y
 
 La CV de `xgb_tuned` está en `reports/metrics/binary_xgb_tuned_cv.json`.
 
+### Tarea multiclase: por qué no fusionamos clases
+
+En la corrección del MVP quedó pendiente decidir si conviene fusionar Analysis, Backdoor y DoS, las tres clases con peor F1, o dejar la binaria como tarea principal ([issue #25](https://github.com/agusclap/ml-network-intrusion-detection/issues/25)). Para decidir medimos cuánto se mezclan las etiquetas en el train. Agrupamos las filas que tienen exactamente las mismas 42 variables y calculamos el **techo de Macro-F1**: el F1 de un clasificador perfecto, que a cada grupo de filas idénticas le asigna su etiqueta más frecuente. Ningún modelo puede superarlo, porque recibe la misma entrada y tiene que dar la misma respuesta. El cálculo está al final de [notebooks/01_eda_minimo.ipynb](notebooks/01_eda_minimo.ipynb).
+
+| Clase | Filas idénticas a filas de otra clase | F1 máximo posible (train) | XGBoost en la CV | XGBoost en el test |
+|---|---|---|---|---|
+| DoS | 80 % | 0,50 | 0,38 | 0,26 |
+| Backdoor | 77 % | 0,40 | 0,12 | 0,11 |
+| Analysis | 72 % | 0,46 | 0,18 | 0,05 |
+| Exploits | 40 % | 0,82 | 0,65 | 0,70 |
+| Reconnaissance | 18 % | 0,90 | 0,83 | 0,86 |
+| Fuzzers | 11 % | 0,95 | 0,75 | 0,38 |
+| Worms | 10 % | 0,95 | 0,68 | 0,76 |
+| Generic, Normal, Shellcode | menos de 1 % | 1,00 | 0,70 a 0,99 | 0,40 a 0,98 |
+| **Macro-F1** | | **0,80** | **0,62** | **0,52** |
+
+Si se fusionan clases, el techo sube:
+
+| Clases | Techo de Macro-F1 | F1 máximo de la clase fusionada |
+|---|---|---|
+| Las 10 actuales | 0,80 | — |
+| Analysis + Backdoor + DoS | 0,90 | 0,62 |
+| Analysis + Backdoor + DoS + Exploits | 0,97 | 0,96 |
+
+- **El límite está en los datos, no en el modelo.** Entre el 72 % y el 80 % de las filas de Analysis, Backdoor y DoS son idénticas a filas de otras clases. Es error irreducible: lo que distingue esas categorías está en el contenido de los paquetes, y las estadísticas del flujo no lo tienen.
+- **Fusionar cambia la pregunta, no mejora la detección.** El Macro-F1 subiría porque el problema es más fácil, no porque el modelo distinga mejor, y no se podría comparar con el de 10 clases. Fusionar solo las tres no alcanza: la clase nueva queda en 0,62, porque sigue mezclada con Exploits. Fusionar las cuatro mete en la misma clase a Exploits, la segunda clase de ataque más grande del train, aunque el 60 % de sus filas sí se distingue.
+- **La pregunta que importa en un NIDS ya la resuelve la binaria:** si un flujo es ataque o no. Todas estas clases son ataques, así que mezclarlas entre sí no genera falsas alarmas ni ataques sin detectar.
+
+**Decisión**, registrada en la issue #25: se mantienen las 10 clases y la binaria sigue siendo la tarea principal. La multiclase se reporta junto con su techo, y cada F1 por clase se lee contra lo máximo que permiten los datos. No se entrenó ni se evaluó nada nuevo sobre el test.
+
 ### Reproducibilidad
 
 - Los datos se verifican con su MD5 antes de usarlos, la semilla es 42 en todo el proyecto y las versiones de las librerías están fijas en `pyproject.toml` y `requirements.txt`.
@@ -477,6 +507,7 @@ Comprueban que `get_X_y` no deje pasar `id` ni las etiquetas a la entrada, que l
 - [ ] Evaluar sobre la parte del test que no aparece en el train, y recalibrar el umbral con tráfico de la red donde se vaya a usar.
 - [x] Búsqueda de hiperparámetros de XGBoost con cross-validation (18 configuraciones). Los del MVP se mantienen: al umbral OOF ninguna los mejora (ver [Búsqueda de hiperparámetros](#búsqueda-de-hiperparámetros)).
 - [ ] Repetir la búsqueda midiendo cada configuración a su umbral OOF, o con ROC-AUC, en vez del F1 al umbral 0,5.
+- [x] Decidir qué hacer con Analysis, Backdoor y DoS en la multiclase. Se mantienen las 10 clases: el techo de Macro-F1 de los datos es 0,80, y fusionar cambia la pregunta sin mejorar la detección (ver [Tarea multiclase](#tarea-multiclase-por-qué-no-fusionamos-clases)).
 - [ ] Analizar qué variables pesan más en las predicciones.
 - [x] Tests automáticos con pytest y GitHub Actions sobre la separación de X / y, la agrupación de la CV, la elección del umbral y la validación de `inference.py`.
 - [x] Una demo interactiva con Streamlit que clasifique un CSV subido por el usuario, empaquetada con Docker.
