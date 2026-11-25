@@ -58,4 +58,16 @@ XGB_PARAMS = {
     "colsample_bytree": 0.8,
     "random_state": SEED,
     "n_jobs": -1,
+    "min_child_weight": 1,
 }
+
+# Grilla de la búsqueda de hiperparámetros (issue #28). Los valores de XGB_PARAMS están incluidos como referencia.
+XGB_GRID = {
+    "max_depth": [4, 6, 8],              # complejidad del modelo
+    "learning_rate": [0.05, 0.1, 0.2],   # tasa de aprendizaje
+    "min_child_weight": [1, 10],         # regularización
+}
+
+# Hiperparámetros que eligió src/tune.py por F1 al umbral 0,5 (issue #28). NO se adoptaron: al umbral OOF
+# no mejoran a XGB_PARAMS (ver README). Quedan para reproducir el experimento con: python -m src.train --model xgb_tuned
+XGB_TUNED_PARAMS = {**XGB_PARAMS, "max_depth": 8, "learning_rate": 0.2}

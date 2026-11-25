@@ -15,7 +15,7 @@ import joblib
 from src.config import FIGURES_DIR, METRICS_DIR, MODELS_DIR
 from src.metrics import select_binary_threshold
 from src.baselines import make_baseline
-from src.config import LR_PARAMS, SEED, XGB_PARAMS
+from src.config import LR_PARAMS, SEED, XGB_PARAMS, XGB_TUNED_PARAMS
 from src.data import get_X_y, load_split
 from src.metrics import compute_metrics
 from src.plots import save_confusion_matrix, save_roc_curve
@@ -24,27 +24,30 @@ from src.features import build_preprocessor, drop_ttl
 
 N_FOLDS = 5
 
+XGB_MODELS = ("xgb", "xgb_sinttl", "xgb_tuned")   # todas las variantes de XGBoost
+SIN_TTL_MODELS = ("xgb_sinttl", "xgb_tuned")       # las que no usan las variables de TTL
 
-def build_model(task: str, model: str):
+def build_model(task: str, model: str, params: dict | None = None):
     """Devuelve el modelo sin entrenar: la regla sin IA, o un Pipeline (preprocesador + modelo)."""
     if model == "heuristic":
         return make_baseline(task)            # recibe X crudo: no lleva preprocesador
     if model == "lr":
         estimator = LogisticRegression(**LR_PARAMS)
-    elif model in ("xgb", "xgb_sinttl"):
-        estimator = XGBClassifier(**XGB_PARAMS)
+    elif model in XGB_MODELS:
+        default = XGB_TUNED_PARAMS if model == "xgb_tuned" else XGB_PARAMS
+        estimator = XGBClassifier(**(params or default))
     else:
-        raise ValueError(f"model debe ser 'heuristic', 'lr', 'xgb' o 'xgb_sinttl', no {model!r}")
-    steps = [("prep", build_preprocessor("xgb" if model == "xgb_sinttl" else model)),
+        raise ValueError(f"model debe ser 'heuristic', 'lr' o uno de {XGB_MODELS}, no {model!r}")
+    steps = [("prep", build_preprocessor("xgb" if model in XGB_MODELS else model)),
              ("model", estimator)]
-    if model == "xgb_sinttl":
+    if model in SIN_TTL_MODELS:
         steps.insert(0, ("sin_ttl", FunctionTransformer(drop_ttl)))   # primer paso: sacar el TTL
     return Pipeline(steps)
 
 
 def fit_model(clf, model: str, X, y):
     """Entrena el modelo. XGBoost recibe pesos por clase calculados con el mismo y que se usa para entrenar."""
-    if model in ("xgb", "xgb_sinttl"):
+    if model in XGB_MODELS:
         weights = compute_sample_weight("balanced", y)
         clf.fit(X, y, model__sample_weight=weights)
     else:
@@ -73,13 +76,13 @@ def make_folds(X: pd.DataFrame, y: pd.Series, groups: pd.Series) -> list:
     return list(sgkf.split(X, y, groups))
 
 
-def cross_validate(task: str, model: str):
+def cross_validate(task: str, model: str, params: dict | None = None):
     """Corre la CV de 5 folds. Devuelve las métricas de cada fold y los scores out-of-fold."""
     X, y, encoder = load_xy(task)
 
     # Filas con exactamente la misma X van al mismo grupo, y cada grupo cae entero en un solo fold.
     # Así ninguna fila repetida está a la vez en entrenamiento y en validación (recomendación de la cátedra).
-    groups = make_groups(drop_ttl(X) if model == "xgb_sinttl" else X)
+    groups = make_groups(drop_ttl(X) if model in SIN_TTL_MODELS else X)
 
     fold_metrics = []
     oof_scores = np.zeros(len(y))     # probabilidad de ataque para cada fila (binaria)
@@ -92,7 +95,7 @@ def cross_validate(task: str, model: str):
         X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
         y_tr, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
-        clf = fit_model(build_model(task, model), model, X_tr, y_tr)
+        clf = fit_model(build_model(task, model, params), model, X_tr, y_tr)
 
 
         y_pred = clf.predict(X_val)
@@ -184,6 +187,6 @@ def run(task: str, model: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cross-validation y entrenamiento final")
     parser.add_argument("--task", choices=["binary", "multiclass"], default="binary")
-    parser.add_argument("--model", choices=["heuristic", "lr", "xgb", "xgb_sinttl"], required=True)
+    parser.add_argument("--model", choices=["heuristic", "lr", *XGB_MODELS], required=True)
     args = parser.parse_args()
     run(args.task, args.model)
